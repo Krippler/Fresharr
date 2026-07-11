@@ -36,6 +36,7 @@ class ImdbSource:
 
     def __init__(self, config: Config):
         self.min_rating = config.imdb_min_rating
+        self.min_votes = config.imdb_min_votes
         self.movie_charts = config.imdb_movie_charts
         self.tv_charts = config.imdb_tv_charts
         self.session = requests.Session()
@@ -51,10 +52,11 @@ class ImdbSource:
         for chart in self.tv_charts:
             items.extend(self._fetch_chart(chart, TV))
         kept = [i for i in items
-                if not self.min_rating
-                or (i.audience_score or 0) >= self.min_rating * 10]
-        log.info("IMDb: %d items fetched, %d pass rating >= %.1f",
-                 len(items), len(kept), self.min_rating)
+                if (not self.min_rating
+                    or (i.audience_score or 0) >= self.min_rating * 10)
+                and (not self.min_votes or (i.votes or 0) >= self.min_votes)]
+        log.info("IMDb: %d items fetched, %d pass rating >= %.1f, votes >= %d",
+                 len(items), len(kept), self.min_rating, self.min_votes)
         return kept
 
     def _fetch_chart(self, chart: str, media_type: str) -> list[MediaItem]:
@@ -92,7 +94,9 @@ def parse_next_data(html: str, media_type: str, source: str) -> list[MediaItem]:
             continue
         seen.add(title)
         year = (node.get("releaseYear") or {}).get("year")
-        rating = (node.get("ratingsSummary") or {}).get("aggregateRating")
+        summary = node.get("ratingsSummary") or {}
+        rating = summary.get("aggregateRating")
+        votes = summary.get("voteCount")
         title_id = node.get("id") if isinstance(node.get("id"), str) else None
         items.append(MediaItem(
             title=title,
@@ -101,6 +105,7 @@ def parse_next_data(html: str, media_type: str, source: str) -> list[MediaItem]:
             year=year if isinstance(year, int) else None,
             audience_score=round(rating * 10) if isinstance(rating, (int, float)) else None,
             url=f"https://www.imdb.com/title/{title_id}/" if title_id else None,
+            votes=votes if isinstance(votes, int) else None,
         ))
     return items
 
@@ -133,7 +138,9 @@ def parse_ld_json(html: str, media_type: str, source: str) -> list[MediaItem]:
             title = (entry.get("name") or "").strip()
             if not title:
                 continue
-            rating = (entry.get("aggregateRating") or {}).get("ratingValue")
+            aggregate = entry.get("aggregateRating") or {}
+            rating = aggregate.get("ratingValue")
+            votes = aggregate.get("ratingCount")
             items.append(MediaItem(
                 title=title,
                 media_type=media_type,
@@ -142,5 +149,6 @@ def parse_ld_json(html: str, media_type: str, source: str) -> list[MediaItem]:
                 if isinstance(rating, (int, float, str)) and str(rating).replace(".", "", 1).isdigit()
                 else None,
                 url=entry.get("url"),
+                votes=votes if isinstance(votes, int) else None,
             ))
     return items

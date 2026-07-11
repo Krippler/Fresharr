@@ -78,18 +78,28 @@ class SettingsStore:
         enabled = entry.get("enabled")
         return default if enabled is None else bool(enabled)
 
-    def _language_list(self, key: str) -> list[str]:
+    def _language_list(self, key: str, legacy_key: str | None = None) -> list[str]:
         with self._lock:
-            raw = self._data.get(key, [])
+            if key in self._data:
+                raw = self._data[key]
+            elif legacy_key and legacy_key in self._data:
+                raw = self._data[legacy_key]  # pre-split settings files
+            else:
+                raw = []
         if not isinstance(raw, list):
             return []
         return [lang for lang in raw
                 if isinstance(lang, str) and _LANG_CODE_RE.match(lang)]
 
     @property
-    def languages(self) -> list[str]:
-        """Original-language codes for movies & TV; empty means all."""
-        return self._language_list("languages")
+    def movie_languages(self) -> list[str]:
+        """Original-language codes for movies; empty means all."""
+        return self._language_list("movie_languages", legacy_key="languages")
+
+    @property
+    def tv_languages(self) -> list[str]:
+        """Original-language codes for TV shows; empty means all."""
+        return self._language_list("tv_languages", legacy_key="languages")
 
     @property
     def anime_languages(self) -> list[str]:
@@ -124,7 +134,8 @@ class SettingsStore:
             "run_interval_days": self.run_interval_days,
             "sources": {name: {"enabled": self.is_enabled(name)}
                         for name in self._source_defaults},
-            "languages": self.languages,
+            "movie_languages": self.movie_languages,
+            "tv_languages": self.tv_languages,
             "anime_languages": self.anime_languages,
             "options": self.options(),
         }
@@ -133,9 +144,10 @@ class SettingsStore:
         """Apply a partial update from the web UI and persist it.
 
         Accepts {"run_interval_days": <number>, "sources": {"<name>":
-        {"enabled": <bool>}}, "languages": [...], "anime_languages": [...]};
-        any part may be omitted. Intervals below the daily minimum are
-        clamped, unknown sources and malformed language codes are rejected.
+        {"enabled": <bool>}}, "movie_languages": [...], "tv_languages": [...],
+        "anime_languages": [...], "options": {...}}; any part may be omitted.
+        Intervals below the daily minimum are clamped, unknown sources and
+        malformed language codes are rejected.
         """
         if not isinstance(payload, dict):
             raise SettingsError("Expected a JSON object")
@@ -163,7 +175,7 @@ class SettingsStore:
                     raise SettingsError(f"sources.{name} must be {{\"enabled\": true|false}}")
             changes["sources"] = sources
 
-        for key in ("languages", "anime_languages"):
+        for key in ("movie_languages", "tv_languages", "anime_languages"):
             if key not in payload:
                 continue
             languages = payload[key]
@@ -194,7 +206,7 @@ class SettingsStore:
             for name, entry in changes.get("sources", {}).items():
                 self._data.setdefault("sources", {}).setdefault(name, {})["enabled"] = \
                     entry["enabled"]
-            for key in ("languages", "anime_languages"):
+            for key in ("movie_languages", "tv_languages", "anime_languages"):
                 if key in changes:
                     self._data[key] = changes[key]
             for key, value in changes.get("options", {}).items():

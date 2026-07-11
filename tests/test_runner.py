@@ -58,8 +58,9 @@ def test_tv_dropped_without_sonarr(monkeypatch):
 
 
 class FakeSettings:
-    def __init__(self, languages=(), anime_languages=()):
-        self.languages = list(languages)
+    def __init__(self, movie_languages=(), tv_languages=(), anime_languages=()):
+        self.movie_languages = list(movie_languages)
+        self.tv_languages = list(tv_languages)
         self.anime_languages = list(anime_languages)
 
 
@@ -76,6 +77,10 @@ LANG_ITEMS = [
               year=2026, language="fr"),
     MediaItem(title="Unknown Language Movie", media_type=MOVIE,
               source="rottentomatoes", year=2026),
+    MediaItem(title="Korean Show", media_type=TV, source="tmdb",
+              year=2026, language="ko"),
+    MediaItem(title="English Show", media_type=TV, source="tmdb",
+              year=2026, language="en"),
     MediaItem(title="Japanese Anime", media_type=TV, source="anilist",
               year=2026, language="ja", anime=True),
     MediaItem(title="Chinese Donghua", media_type=TV, source="anilist",
@@ -83,13 +88,15 @@ LANG_ITEMS = [
 ]
 
 
-def test_language_filter_split_by_anime(monkeypatch):
-    settings = FakeSettings(languages=["en"], anime_languages=["ja"])
+def test_language_filters_split_by_movie_tv_anime(monkeypatch):
+    settings = FakeSettings(movie_languages=["en"], tv_languages=["ko"],
+                            anime_languages=["ja"])
     result = run_collect_with_settings(monkeypatch, settings, LANG_ITEMS)
-    # French movie dropped (movies list), Chinese donghua dropped (anime
-    # list), unknown-language item passes.
+    # French movie dropped (movie list), English show dropped (tv list),
+    # Chinese donghua dropped (anime list), unknown-language item passes.
     assert sorted(i.title for i in result) == [
-        "English Movie", "Japanese Anime", "Unknown Language Movie"]
+        "English Movie", "Japanese Anime", "Korean Show",
+        "Unknown Language Movie"]
 
 
 def test_empty_language_lists_pass_everything(monkeypatch):
@@ -98,9 +105,15 @@ def test_empty_language_lists_pass_everything(monkeypatch):
     assert len(result) == len(LANG_ITEMS)
 
 
-def test_anime_filter_does_not_touch_movies(monkeypatch):
+def test_each_language_list_is_independent(monkeypatch):
+    # Only the anime list set: movies and TV are untouched
     settings = FakeSettings(anime_languages=["ja"])
     result = run_collect_with_settings(monkeypatch, settings, LANG_ITEMS)
-    assert sorted(i.title for i in result) == [
-        "English Movie", "French Movie", "Japanese Anime",
-        "Unknown Language Movie"]
+    assert "Chinese Donghua" not in {i.title for i in result}
+    assert len(result) == len(LANG_ITEMS) - 1
+
+    # Only the movie list set: TV shows and anime are untouched
+    settings = FakeSettings(movie_languages=["en"])
+    result = run_collect_with_settings(monkeypatch, settings, LANG_ITEMS)
+    assert "French Movie" not in {i.title for i in result}
+    assert len(result) == len(LANG_ITEMS) - 1

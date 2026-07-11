@@ -24,6 +24,7 @@ class TraktSource:
 
     def __init__(self, config: Config):
         self.min_rating = config.trakt_min_rating
+        self.min_votes = config.trakt_min_votes
         self.limit = config.trakt_limit
         self.session = requests.Session()
         self.session.headers.update({
@@ -59,7 +60,9 @@ class TraktSource:
                 continue
             item = self._parse_item(media, media_type)
             if item and (not self.min_rating
-                         or (item.audience_score or 0) >= self.min_rating * 10):
+                         or (item.audience_score or 0) >= self.min_rating * 10) \
+                    and (not self.min_votes
+                         or (item.votes or 0) >= self.min_votes):
                 items.append(item)
         return items
 
@@ -80,4 +83,5 @@ class TraktSource:
             tmdb_id=ids.get("tmdb") if isinstance(ids.get("tmdb"), int) else None,
             url=f"https://trakt.tv/{kind}/{slug}" if slug else None,
             language=media.get("language") or None,
+            votes=media.get("votes") if isinstance(media.get("votes"), int) else None,
         )

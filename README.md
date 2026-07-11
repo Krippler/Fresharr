@@ -24,21 +24,25 @@ the only things set on the container itself are the port, the `/config` path,
 and `DRY_RUN`. In the UI you control:
 
 - **Connections** — Radarr and Sonarr URLs, API keys, quality profiles and
-  root folders. Fields save as you leave them and apply on the next run.
+  root folders. Once a connection works, the quality profile and root folder
+  become **dropdowns populated live from that app's API** — no typing names.
+  Fields save as you leave them and apply on the next run.
 - **Which discovery sites are used** — enable or disable each site individually
-  with a toggle, and set each site's score threshold right on its row. Sites
-  that need an API key (TMDB, Trakt) take it in the same place.
+  with a toggle, and set each site's score threshold and **minimum number of
+  reviews/ratings** (on sites that report one: IMDb, TMDB, Trakt, Letterboxd,
+  MyAnimeList) right on its row. Sites that need an API key (TMDB, Trakt) take
+  it in the same place.
 - **The run schedule** — from once a day (the most frequent allowed) up to every
   2–3 days, weekly, twice a month, or monthly. The interval is a target, not an
   exact timer: each run happens at a **random time** around it (±6 hours), and
   never less than 18 hours after the previous run — so with the daily preset,
   runs land somewhere between 18 and 30 hours apart, at a different time of day
   each cycle. This randomization is built in and not configurable.
-- **Original language** — separate multi-select filters for **Movies & TV** and
-  for **Anime**. Only titles whose original language is selected get added;
-  nothing selected means all languages. Applies where the source reports a
-  language (TMDB, Trakt, AniList, MyAnimeList); the scraped review sites don't
-  carry language metadata, so their titles always pass.
+- **Original language** — separate multi-select filters for **Movies**,
+  **TV shows** and **Anime**. Only titles whose original language is selected
+  get added; nothing selected means all languages. Applies where the source
+  reports a language (TMDB, Trakt, AniList, MyAnimeList); the scraped review
+  sites don't carry language metadata, so their titles always pass.
 - **Limits** — max additions per run and minimum release year.
 - **Run now** — trigger a discovery pass immediately.
 - Status: last/next run, what was added, and recent additions.
@@ -135,9 +139,11 @@ The container runs as `nobody:users` (99:100), matching Unraid appdata conventio
 
 **Set in the web interface** (stored in `/config/settings.json`, applied
 without a restart): Radarr/Sonarr URLs, API keys, quality profiles and root
-folders; every site's score threshold; TMDB API key and Trakt client ID;
-Rotten Tomatoes list paths; max additions per run; minimum release year;
-original-language filters; per-site toggles; and the run schedule.
+folders (picked from live dropdowns); every site's score threshold and
+minimum review/rating count; TMDB API key and Trakt client ID; Rotten
+Tomatoes list paths; max additions per run; minimum release year;
+original-language filters for movies, TV and anime; per-site toggles; and
+the run schedule.
 
 **Environment variables** cover runtime behaviour and advanced tuning. Any
 UI-editable setting can *also* be provided as an env var (same names as before,
