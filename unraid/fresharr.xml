@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/krippler/fresharr/issues</Support>
   <Project>https://github.com/krippler/fresharr</Project>
-  <Overview>Fresharr discovers new and highly rated movies and TV shows from Rotten Tomatoes, IMDb, TMDB and Trakt and automatically adds them to Radarr and Sonarr. Open the web interface to choose the run schedule (daily up to monthly) and to enable or disable each discovery site individually - those settings live in the UI, not in this template. Start with DRY_RUN=true to preview what it would add before letting it loose.</Overview>
+  <Overview>Fresharr discovers new and highly rated movies, TV shows and anime from Rotten Tomatoes, IMDb, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and automatically adds them to Radarr and Sonarr (anime series get Sonarr's anime type). Open the web interface to choose the run schedule (daily up to monthly) and to enable or disable each discovery site individually - those settings live in the UI, not in this template. Start with DRY_RUN=true to preview what it would add before letting it loose.</Overview>
   <WebUI>http://[IP]:[PORT:8383]/</WebUI>
   <Category>MediaApp:Video Tools: Downloaders:</Category>
   <Icon>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/icon.png</Icon>
@@ -32,6 +32,10 @@
   <Config Name="Trakt Client ID" Target="TRAKT_CLIENT_ID" Default="" Mode="" Description="Free API app client ID from trakt.tv/oauth/applications - only needed to enable the Trakt site in the web UI." Type="Variable" Display="advanced" Required="false" Mask="true"/>
   <Config Name="Trakt Minimum Rating" Target="TRAKT_MIN_RATING" Default="7.0" Mode="" Description="Minimum Trakt rating 0-10 (Trakt site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="IMDb Minimum Rating" Target="IMDB_MIN_RATING" Default="7.0" Mode="" Description="Minimum IMDb rating 0-10 (IMDb site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Metacritic Minimum Score" Target="METACRITIC_MIN_SCORE" Default="75" Mode="" Description="Minimum Metascore 0-100 (Metacritic site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Letterboxd Minimum Rating" Target="LETTERBOXD_MIN_RATING" Default="3.5" Mode="" Description="Minimum Letterboxd star rating 0-5 (Letterboxd site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="AniList Minimum Score" Target="ANILIST_MIN_SCORE" Default="75" Mode="" Description="Minimum AniList score 0-100 (AniList site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="MyAnimeList Minimum Score" Target="MAL_MIN_SCORE" Default="7.5" Mode="" Description="Minimum MAL score 0-10 (MyAnimeList site only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Radarr Quality Profile" Target="RADARR_QUALITY_PROFILE" Default="" Mode="" Description="Quality profile name or id. Empty = Radarr's first profile." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Radarr Root Folder" Target="RADARR_ROOT_FOLDER" Default="" Mode="" Description="Root folder path as configured in Radarr. Empty = first root folder." Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Sonarr Quality Profile" Target="SONARR_QUALITY_PROFILE" Default="" Mode="" Description="Quality profile name or id. Empty = Sonarr's first profile." Type="Variable" Display="advanced" Required="false" Mask="false"/>

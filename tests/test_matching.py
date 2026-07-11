@@ -47,3 +47,10 @@ def test_no_year_takes_first_title_match():
 
 def test_empty_candidates():
     assert pick_best([], "Dune", 2021) is None
+
+
+def test_alt_titles_match():
+    candidates = [{"title": "Sousou no Frieren", "year": 2026, "tvdbId": 424536}]
+    assert pick_best(candidates, "Frieren: Beyond Journey's End", 2026,
+                     alt_titles=("Sousou no Frieren",)) is not None
+    assert pick_best(candidates, "Frieren: Beyond Journey's End", 2026) is None

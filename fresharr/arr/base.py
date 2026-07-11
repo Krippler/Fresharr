@@ -107,12 +107,13 @@ def is_already_exists_error(exc: requests.HTTPError) -> bool:
 
 
 def pick_best(candidates: list[dict], title: str, year: int | None,
-              tmdb_id: int | None = None) -> dict | None:
+              tmdb_id: int | None = None,
+              alt_titles: tuple[str, ...] = ()) -> dict | None:
     """Choose the best lookup result for a discovered item.
 
-    Preference order: exact TMDB id, exact normalized title with matching
-    year (+/-1 to absorb festival vs wide-release dates), exact normalized
-    title with no year to compare against.
+    Preference order: exact TMDB id, exact normalized title (primary or any
+    alternate) with matching year (+/-1 to absorb festival vs wide-release
+    dates), exact normalized title with no year to compare against.
     """
     if not candidates:
         return None
@@ -120,9 +121,9 @@ def pick_best(candidates: list[dict], title: str, year: int | None,
         for cand in candidates:
             if cand.get("tmdbId") == tmdb_id:
                 return cand
-    wanted = normalize_title(title)
+    wanted = {normalize_title(t) for t in (title, *alt_titles) if t}
     title_matches = [c for c in candidates
-                     if normalize_title(c.get("title", "")) == wanted]
+                     if normalize_title(c.get("title", "")) in wanted]
     if not title_matches:
         return None
     if year:
@@ -132,3 +133,16 @@ def pick_best(candidates: list[dict], title: str, year: int | None,
                 return cand
         return None
     return title_matches[0]
+
+
+def lookup_terms(item) -> list[str]:
+    """Search terms to try in order: exact TMDB id first, then the primary
+    title, then each alternate title."""
+    terms = []
+    if item.tmdb_id:
+        terms.append(f"tmdb:{item.tmdb_id}")
+    terms.append(item.title)
+    for alt in item.alt_titles:
+        if alt and alt not in terms:
+            terms.append(alt)
+    return terms

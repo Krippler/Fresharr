@@ -16,6 +16,12 @@ class MediaItem:
     audience_score: int | None = None
     tmdb_id: int | None = None
     url: str | None = None
+    # Alternate titles (e.g. romaji vs English for anime) tried during
+    # Radarr/Sonarr lookup when the primary title doesn't match.
+    alt_titles: tuple[str, ...] = ()
+    # Anime series are added to Sonarr with seriesType "anime" so episodes
+    # get absolute numbering.
+    anime: bool = False
 
     @property
     def key(self) -> str:

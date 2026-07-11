@@ -74,6 +74,20 @@ class Config:
     trakt_min_rating: float = 7.0
     trakt_limit: int = 40
 
+    # Metacritic
+    metacritic_min_score: int = 75
+
+    # Letterboxd
+    letterboxd_min_rating: float = 3.5  # 0-5 stars
+    letterboxd_max_films: int = 30
+    letterboxd_list: str = "popular/this/week"
+
+    # AniList
+    anilist_min_score: int = 75  # 0-100
+
+    # MyAnimeList (via Jikan)
+    mal_min_score: float = 7.5  # 0-10
+
     # Global filters / limits
     min_year: int = 0
     max_items_per_run: int = 20
@@ -130,6 +144,12 @@ class Config:
             trakt_client_id=_str("TRAKT_CLIENT_ID"),
             trakt_min_rating=_float("TRAKT_MIN_RATING", 7.0),
             trakt_limit=_int("TRAKT_LIMIT", 40),
+            metacritic_min_score=_int("METACRITIC_MIN_SCORE", 75),
+            letterboxd_min_rating=_float("LETTERBOXD_MIN_RATING", 3.5),
+            letterboxd_max_films=_int("LETTERBOXD_MAX_FILMS", 30),
+            letterboxd_list=_str("LETTERBOXD_LIST", "popular/this/week"),
+            anilist_min_score=_int("ANILIST_MIN_SCORE", 75),
+            mal_min_score=_float("MAL_MIN_SCORE", 7.5),
             min_year=_int("MIN_YEAR", 0),
             max_items_per_run=_int("MAX_ITEMS_PER_RUN", 20),
             radarr_url=_str("RADARR_URL"),

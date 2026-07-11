@@ -6,7 +6,7 @@ from .. import state
 from ..config import Config
 from ..models import MediaItem
 from ..util import normalize_title
-from .base import ArrClient, is_already_exists_error, pick_best
+from .base import ArrClient, is_already_exists_error, lookup_terms, pick_best
 
 log = logging.getLogger(__name__)
 
@@ -56,14 +56,15 @@ class Sonarr(ArrClient):
         if self._in_library(item, None):
             return state.EXISTS
 
-        term = f"tmdb:{item.tmdb_id}" if item.tmdb_id else item.title
-        candidates = self._get("series/lookup", term=term)
-        match = pick_best(candidates, item.title, item.year, item.tmdb_id)
-        if not match and item.tmdb_id:
-            # tmdb: term matched nothing usable; retry by title
-            candidates = self._get("series/lookup", term=item.title)
-            match = pick_best(candidates, item.title, item.year)
-        if not match or not match.get("tvdbId"):
+        match = None
+        for term in lookup_terms(item):
+            candidates = self._get("series/lookup", term=term)
+            match = pick_best(candidates, item.title, item.year, item.tmdb_id,
+                              item.alt_titles)
+            if match and match.get("tvdbId"):
+                break
+            match = None
+        if not match:
             log.info("Sonarr: no confident match for %s", item.describe())
             return state.NOT_FOUND
         if self._in_library(item, match["tvdbId"]):
@@ -75,6 +76,7 @@ class Sonarr(ArrClient):
             "rootFolderPath": self.resolve_root_folder(),
             "monitored": self.monitored,
             "seasonFolder": True,
+            "seriesType": "anime" if item.anime else "standard",
             "addOptions": {"searchForMissingEpisodes": self.search_on_add},
         })
         language_profile_id = self._language_profile()

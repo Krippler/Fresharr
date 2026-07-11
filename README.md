@@ -1,9 +1,10 @@
 # Fresharr
 
-Fresharr discovers **new and highly rated movies & TV shows** from Rotten Tomatoes,
-IMDb, TMDB and Trakt, and automatically adds them to **Radarr** and **Sonarr**.
-Pick your sites and schedule in the web interface, set minimum score thresholds,
-and let your library grow with well-reviewed releases — no manual searching.
+Fresharr discovers **new and highly rated movies, TV shows & anime** from Rotten
+Tomatoes, IMDb, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and
+automatically adds them to **Radarr** and **Sonarr**. Pick your sites and schedule
+in the web interface, set minimum score thresholds, and let your library grow with
+well-reviewed releases — no manual searching.
 
 Built to run as a lightweight Docker container, with a ready-made **Unraid**
 Community Applications template.
@@ -27,16 +28,31 @@ variables.
 
 ## Discovery sites
 
+### Movies & TV
+
 | Site | Needs | What it finds |
 |---|---|---|
 | **Rotten Tomatoes** (default on) | nothing | Browse lists (Certified Fresh in theaters / at home, Fresh TV) filtered by Tomatometer / audience score. |
 | **IMDb** | nothing | Most Popular Movies & TV charts, filtered by IMDb rating. |
+| **Metacritic** | nothing | Recent movies & TV from the browse charts, filtered by Metascore. |
+| **Letterboxd** | nothing | Films popular this week, filtered by Letterboxd star rating (movies only). |
 | **TMDB** | free API key ([themoviedb.org](https://www.themoviedb.org/settings/api)) | Official API: recently released, highly rated titles. Most stable source, exact ID matches. |
 | **Trakt** | free API app client ID ([trakt.tv](https://trakt.tv/oauth/applications)) | Trending movies & shows, filtered by Trakt rating. Exact ID matches. |
 
-Rotten Tomatoes and IMDb have no official APIs, so those sources parse the sites'
-own page data defensively — if a site changes its layout, Fresharr logs a warning
-and carries on with the other sources.
+### Anime
+
+| Site | Needs | What it finds |
+|---|---|---|
+| **AniList** | nothing | Trending anime via the official GraphQL API, filtered by AniList score. |
+| **MyAnimeList** | nothing | Current season + top airing anime via the Jikan API, filtered by MAL score. |
+
+Anime handling: series are added to Sonarr with the **anime** series type
+(absolute episode numbering), anime films go to Radarr, and both the English and
+romaji titles are used when matching — whichever your indexers know the show by.
+
+Rotten Tomatoes, IMDb, Metacritic and Letterboxd have no public APIs, so those
+sources parse the sites' own page data defensively — if a site changes its
+layout, Fresharr logs a warning and carries on with the other sources.
 
 ## How it works
 
@@ -127,6 +143,12 @@ At least one of Radarr/Sonarr must be configured.
 | `TRAKT_CLIENT_ID` | – | Unlocks the Trakt site in the web UI. |
 | `TRAKT_MIN_RATING` | `7.0` | Minimum Trakt rating (0–10). |
 | `TRAKT_LIMIT` | `40` | Trending items fetched per media type. |
+| `METACRITIC_MIN_SCORE` | `75` | Minimum Metascore (0–100). |
+| `LETTERBOXD_MIN_RATING` | `3.5` | Minimum Letterboxd star rating (0–5). |
+| `LETTERBOXD_MAX_FILMS` | `30` | Popular films examined per run (each needs one page fetch for its rating). |
+| `LETTERBOXD_LIST` | `popular/this/week` | Letterboxd films list to read. |
+| `ANILIST_MIN_SCORE` | `75` | Minimum AniList score (0–100). |
+| `MAL_MIN_SCORE` | `7.5` | Minimum MyAnimeList score (0–10). |
 | `MIN_YEAR` | – | Ignore titles released before this year. |
 
 ### Adding behaviour

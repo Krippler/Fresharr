@@ -20,6 +20,7 @@ class SourceDef:
     name: str
     label: str
     description: str
+    category: str  # UI grouping, e.g. "Movies & TV" or "Anime"
     default_enabled: bool
     requires: str  # env var(s) that must be set, "" if none
     factory: Callable
@@ -48,6 +49,25 @@ def _trakt_factory(config):
     from .trakt import TraktSource
     return TraktSource(config)
 
+def _metacritic_factory(config):
+    from .metacritic import MetacriticSource
+    return MetacriticSource(config)
+
+def _letterboxd_factory(config):
+    from .letterboxd import LetterboxdSource
+    return LetterboxdSource(config)
+
+def _anilist_factory(config):
+    from .anilist import AniListSource
+    return AniListSource(config)
+
+def _mal_factory(config):
+    from .myanimelist import MyAnimeListSource
+    return MyAnimeListSource(config)
+
+
+MOVIES_TV = "Movies & TV"
+ANIME = "Anime"
 
 SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
@@ -55,6 +75,7 @@ SOURCE_DEFS: list[SourceDef] = [
         label="Rotten Tomatoes",
         description="Browse lists (Certified Fresh in theaters / at home, Fresh TV) "
                     "filtered by Tomatometer and audience score.",
+        category=MOVIES_TV,
         default_enabled=True,
         requires="",
         factory=_rt_factory,
@@ -67,16 +88,41 @@ SOURCE_DEFS: list[SourceDef] = [
         label="IMDb",
         description="Most Popular Movies and TV charts, filtered by IMDb rating. "
                     "No API key needed.",
+        category=MOVIES_TV,
         default_enabled=False,
         requires="",
         factory=_imdb_factory,
         detail=lambda c: f"rating ≥ {c.imdb_min_rating:.1f}/10",
     ),
     SourceDef(
+        name="metacritic",
+        label="Metacritic",
+        description="Recent movies and TV from the browse charts, filtered by "
+                    "Metascore. No API key needed.",
+        category=MOVIES_TV,
+        default_enabled=False,
+        requires="",
+        factory=_metacritic_factory,
+        detail=lambda c: f"metascore ≥ {c.metacritic_min_score}",
+    ),
+    SourceDef(
+        name="letterboxd",
+        label="Letterboxd",
+        description="Films popular this week, filtered by Letterboxd star rating. "
+                    "Movies only; no API key needed.",
+        category=MOVIES_TV,
+        default_enabled=False,
+        requires="",
+        factory=_letterboxd_factory,
+        detail=lambda c: f"rating ≥ {c.letterboxd_min_rating:.1f}/5, "
+                         f"top {c.letterboxd_max_films} films",
+    ),
+    SourceDef(
         name="tmdb",
         label="TMDB",
         description="The Movie Database's official API: recently released, highly "
                     "rated titles. Free API key required (themoviedb.org).",
+        category=MOVIES_TV,
         default_enabled=False,
         requires="TMDB_API_KEY",
         factory=_tmdb_factory,
@@ -88,10 +134,33 @@ SOURCE_DEFS: list[SourceDef] = [
         label="Trakt",
         description="Trending movies and shows on trakt.tv, filtered by Trakt "
                     "rating. Free API app client ID required (trakt.tv/oauth/applications).",
+        category=MOVIES_TV,
         default_enabled=False,
         requires="TRAKT_CLIENT_ID",
         factory=_trakt_factory,
         detail=lambda c: f"rating ≥ {c.trakt_min_rating:.1f}/10",
+    ),
+    SourceDef(
+        name="anilist",
+        label="AniList",
+        description="Trending anime (series to Sonarr, films to Radarr), filtered "
+                    "by AniList score. No API key needed.",
+        category=ANIME,
+        default_enabled=False,
+        requires="",
+        factory=_anilist_factory,
+        detail=lambda c: f"score ≥ {c.anilist_min_score}/100",
+    ),
+    SourceDef(
+        name="myanimelist",
+        label="MyAnimeList",
+        description="Current season and top airing anime via the Jikan API, "
+                    "filtered by MAL score. No API key needed.",
+        category=ANIME,
+        default_enabled=False,
+        requires="",
+        factory=_mal_factory,
+        detail=lambda c: f"score ≥ {c.mal_min_score:.1f}/10",
     ),
 ]
 
@@ -120,6 +189,7 @@ def describe_sources(config: Config, settings) -> list[dict]:
             "name": sdef.name,
             "label": sdef.label,
             "description": sdef.description,
+            "category": sdef.category,
             "detail": sdef.detail(config),
             "enabled": settings.is_enabled(sdef.name),
             "configured": sdef.is_configured(config),

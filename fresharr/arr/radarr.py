@@ -6,7 +6,7 @@ from .. import state
 from ..config import Config
 from ..models import MediaItem
 from ..util import normalize_title
-from .base import ArrClient, is_already_exists_error, pick_best
+from .base import ArrClient, is_already_exists_error, lookup_terms, pick_best
 
 log = logging.getLogger(__name__)
 
@@ -43,9 +43,13 @@ class Radarr(ArrClient):
         if self._in_library(item, item.tmdb_id):
             return state.EXISTS
 
-        term = f"tmdb:{item.tmdb_id}" if item.tmdb_id else item.title
-        candidates = self._get("movie/lookup", term=term)
-        match = pick_best(candidates, item.title, item.year, item.tmdb_id)
+        match = None
+        for term in lookup_terms(item):
+            candidates = self._get("movie/lookup", term=term)
+            match = pick_best(candidates, item.title, item.year, item.tmdb_id,
+                              item.alt_titles)
+            if match:
+                break
         if not match:
             log.info("Radarr: no confident match for %s", item.describe())
             return state.NOT_FOUND

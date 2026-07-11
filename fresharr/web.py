@@ -106,9 +106,12 @@ INDEX_HTML = """<!doctype html>
           padding: 1rem 1.25rem; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
        color: #8b96a5; margin-bottom: .75rem; }
+  .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+         color: #5f9c6d; margin-top: .8rem; }
+  .cat:first-child { margin-top: 0; }
   .source { display: flex; align-items: center; gap: .9rem;
             padding: .6rem 0; border-top: 1px solid #232b34; }
-  .source:first-of-type { border-top: none; }
+  .cat + .source { border-top: none; }
   .source .info { flex: 1; }
   .source .name { font-weight: 600; }
   .source .desc { color: #8b96a5; font-size: .82rem; }
@@ -252,7 +255,13 @@ function render(o) {
   }
   sel.value = days;
 
-  $("sources").innerHTML = o.sources.map(s => `
+  const groups = new Map();
+  o.sources.forEach(s => {
+    if (!groups.has(s.category)) groups.set(s.category, []);
+    groups.get(s.category).push(s);
+  });
+  $("sources").innerHTML = [...groups.entries()].map(([cat, list]) =>
+    `<div class="cat">${cat}</div>` + list.map(s => `
     <div class="source">
       <div class="info">
         <span class="name">${s.label}</span>
@@ -265,7 +274,7 @@ function render(o) {
                ${s.enabled ? "checked" : ""} ${!s.configured && !s.enabled ? "disabled" : ""}>
         <span class="slider"></span>
       </label>
-    </div>`).join("");
+    </div>`).join("")).join("");
 
   document.querySelectorAll("[data-source]").forEach(box => {
     box.addEventListener("change", async () => {

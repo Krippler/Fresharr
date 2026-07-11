@@ -43,11 +43,15 @@ def test_overview_lists_all_sources(env):
     client, _, _ = env
     data = client.get("/api/overview").get_json()
     names = {s["name"] for s in data["sources"]}
-    assert names == {"rottentomatoes", "imdb", "tmdb", "trakt"}
+    assert names == {"rottentomatoes", "imdb", "metacritic", "letterboxd",
+                     "tmdb", "trakt", "anilist", "myanimelist"}
     rt = next(s for s in data["sources"] if s["name"] == "rottentomatoes")
     assert rt["enabled"] and rt["configured"]
     tmdb = next(s for s in data["sources"] if s["name"] == "tmdb")
     assert not tmdb["configured"] and tmdb["requires"] == "TMDB_API_KEY"
+    anilist = next(s for s in data["sources"] if s["name"] == "anilist")
+    assert anilist["category"] == "Anime"
+    assert anilist["configured"] and not anilist["enabled"]
     assert data["settings"]["run_interval_days"] == 1.0
 
 
