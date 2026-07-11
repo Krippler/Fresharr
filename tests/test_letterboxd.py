@@ -45,7 +45,7 @@ def make_source(**overrides) -> LetterboxdSource:
 
 
 def fake_get(url, timeout=None):
-    if "/films/ajax/" in url:
+    if "/films/" in url and "/film/" not in url:
         return FakeResponse(LIST_HTML)
     slug = url.rstrip("/").rsplit("/", 1)[-1]
     return FakeResponse(FILM_PAGES.get(slug, "<html></html>"))

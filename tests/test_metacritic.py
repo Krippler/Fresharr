@@ -54,3 +54,33 @@ def test_fetch_filters_by_metascore(monkeypatch):
 
 def test_layout_change_degrades_gracefully():
     assert parse_browse_html("<html>redesign</html>", TV, "metacritic") == []
+
+
+def test_year_from_release_date_not_slug():
+    # Regression: "2000 Meters to Andriivka" must not take 2000 from its
+    # URL slug; the release date wins.
+    html = ('<div data-title="2000 Meters to Andriivka">'
+            '<a href="/movie/2000-meters-to-andriivka/"></a>'
+            '<span>Sep 19, 2025</span>'
+            '<div title="Metascore 88 out of 100">88</div></div>')
+    item = parse_browse_html(html, MOVIE, "metacritic")[0]
+    assert item.title == "2000 Meters to Andriivka"
+    assert item.year == 2025
+
+
+def test_year_stripped_from_title():
+    # Regression: "Forever (2025)" must not render as "Forever (2025) (2025)".
+    html = ('<div data-title="Forever (2025)">'
+            '<span>May 8, 2025</span>'
+            '<div title="Metascore 84 out of 100">84</div></div>')
+    item = parse_browse_html(html, TV, "metacritic")[0]
+    assert item.title == "Forever"
+    assert item.year == 2025
+
+
+def test_title_year_used_when_no_release_date():
+    html = ('<div data-title="The Muppet Show (2026)">'
+            '<div title="Metascore 81 out of 100">81</div></div>')
+    item = parse_browse_html(html, TV, "metacritic")[0]
+    assert item.title == "The Muppet Show"
+    assert item.year == 2026

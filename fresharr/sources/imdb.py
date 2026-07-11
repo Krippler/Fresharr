@@ -74,7 +74,7 @@ class ImdbSource:
             items = parse_ld_json(html, media_type, self.name)
         if not items:
             log.warning("IMDb chart %r: no items parsed - the page layout "
-                        "may have changed", chart)
+                        "may have changed. %s", chart, _fingerprint(html))
         return items
 
 
@@ -112,9 +112,12 @@ def parse_next_data(html: str, media_type: str, source: str) -> list[MediaItem]:
 
 def _walk_title_nodes(obj):
     """Yield every dict in the __NEXT_DATA__ tree that looks like a title
-    node, wherever IMDb happens to nest the chart this week."""
+    node, wherever IMDb happens to nest the chart this week. A node needs a
+    titleText; rating/year are optional so a renamed ratingsSummary doesn't
+    hide the whole chart."""
     if isinstance(obj, dict):
-        if "titleText" in obj and ("ratingsSummary" in obj or "releaseYear" in obj):
+        title = obj.get("titleText")
+        if isinstance(title, dict) and isinstance(title.get("text"), str):
             yield obj
         else:
             for value in obj.values():
@@ -124,6 +127,33 @@ def _walk_title_nodes(obj):
             yield from _walk_title_nodes(value)
 
 
+def _fingerprint(html: str) -> str:
+    """A compact description of an unparseable page, logged so a broken
+    scraper can be diagnosed from the user's log without shipping a debug
+    build. Deliberately structural (keys/markers), never page content."""
+    parts = [f"{len(html)} bytes"]
+    match = _NEXT_DATA_RE.search(html)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+            props = (data.get("props") or {}).get("pageProps") or {}
+            parts.append("__NEXT_DATA__ pageProps keys: "
+                         + ",".join(sorted(props)[:12]))
+        except (json.JSONDecodeError, AttributeError):
+            parts.append("__NEXT_DATA__ present but unparseable")
+    else:
+        parts.append("no __NEXT_DATA__")
+    ld_types = []
+    for block in _LD_JSON_RE.findall(html):
+        try:
+            ld = json.loads(block)
+            ld_types.append(ld.get("@type", "?") if isinstance(ld, dict) else "list")
+        except json.JSONDecodeError:
+            pass
+    parts.append(f"ld+json types: {ld_types or 'none'}")
+    return "; ".join(parts)
+
+
 def parse_ld_json(html: str, media_type: str, source: str) -> list[MediaItem]:
     items = []
     for block in _LD_JSON_RE.findall(html):
@@ -131,8 +161,10 @@ def parse_ld_json(html: str, media_type: str, source: str) -> list[MediaItem]:
             data = json.loads(block)
         except json.JSONDecodeError:
             continue
-        for element in data.get("itemListElement") or []:
+        for element in _find_item_list(data):
             entry = element.get("item") if isinstance(element, dict) else None
+            if not isinstance(entry, dict):
+                entry = element if isinstance(element, dict) else None
             if not isinstance(entry, dict):
                 continue
             title = (entry.get("name") or "").strip()
@@ -152,3 +184,20 @@ def parse_ld_json(html: str, media_type: str, source: str) -> list[MediaItem]:
                 votes=votes if isinstance(votes, int) else None,
             ))
     return items
+
+
+def _find_item_list(data) -> list:
+    """Locate an itemListElement array whether the ld+json block is the
+    ItemList itself, a list of blocks, or wraps one under @graph."""
+    if isinstance(data, list):
+        for entry in data:
+            found = _find_item_list(entry)
+            if found:
+                return found
+        return []
+    if isinstance(data, dict):
+        if isinstance(data.get("itemListElement"), list):
+            return data["itemListElement"]
+        if isinstance(data.get("@graph"), list):
+            return _find_item_list(data["@graph"])
+    return []

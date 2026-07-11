@@ -1,46 +1,40 @@
 from fresharr.config import Config
-from fresharr.models import MOVIE
-from fresharr.sources.rottentomatoes import RottenTomatoesSource, _extract_year, _score
+from fresharr.models import MOVIE, TV
+from fresharr.sources.rottentomatoes import (
+    RottenTomatoesSource,
+    parse_browse_html,
+)
 
-RT_PAGE = {
-    "grid": {
-        "list": [
-            {
-                "title": "Dune: Part Two",
-                "mediaUrl": "/m/dune_part_two",
-                "releaseDateText": "Streaming Mar 26, 2024",
-                "criticsScore": {"score": "92", "certifiedAttribute": "certified-fresh"},
-                "audienceScore": {"score": "95"},
-            },
-            {
-                "title": "Low Rated Flick",
-                "mediaUrl": "/m/low_rated",
-                "releaseDateText": "In theaters Jan 5, 2024",
-                "criticsScore": {"score": "41"},
-                "audienceScore": {"score": "38"},
-            },
-            {
-                "title": "No Scores Yet",
-                "mediaUrl": "/m/no_scores",
-                "releaseDateText": "In theaters Jun 1, 2024",
-                "criticsScore": {},
-                "audienceScore": {},
-            },
-        ]
-    },
-    "pageInfo": {"hasNextPage": False, "endCursor": ""},
-}
+# Representative of the rendered browse-page tile markup: an anchor per
+# title carrying scores as attributes and the title/date in data-qa spans.
+BROWSE_HTML = """
+<div class="discovery-tiles">
+  <a data-track="scores" href="/m/dune_part_two" class="js-tile-link">
+    <score-pairs-deprecated criticsscore="92" audiencescore="95"
+      state="certified-fresh"></score-pairs-deprecated>
+    <span data-qa="discovery-media-list-item-title" class="p--small">Dune: Part Two</span>
+    <span data-qa="discovery-media-list-item-start-date">Streaming Mar 26, 2024</span>
+  </a>
+  <a data-track="scores" href="/m/low_rated_flick" class="js-tile-link">
+    <score-pairs-deprecated criticsscore="41" audiencescore="38"></score-pairs-deprecated>
+    <span data-qa="discovery-media-list-item-title" class="p--small">Low Rated Flick</span>
+    <span data-qa="discovery-media-list-item-start-date">In theaters Jan 5, 2024</span>
+  </a>
+  <a data-track="scores" href="/m/no_scores_yet" class="js-tile-link">
+    <score-pairs-deprecated></score-pairs-deprecated>
+    <span data-qa="discovery-media-list-item-title" class="p--small">No Scores Yet</span>
+    <span data-qa="discovery-media-list-item-start-date">Coming soon</span>
+  </a>
+</div>
+"""
 
 
 class FakeResponse:
-    def __init__(self, payload):
-        self._payload = payload
+    def __init__(self, text):
+        self.text = text
 
     def raise_for_status(self):
         pass
-
-    def json(self):
-        return self._payload
 
 
 def make_config(**overrides) -> Config:
@@ -52,47 +46,46 @@ def make_config(**overrides) -> Config:
     return cfg
 
 
+def test_parse_browse_html():
+    items = parse_browse_html(BROWSE_HTML, MOVIE, "rottentomatoes")
+    assert [i.title for i in items] == ["Dune: Part Two", "Low Rated Flick",
+                                        "No Scores Yet"]
+    dune = items[0]
+    assert dune.media_type == MOVIE
+    assert dune.year == 2024
+    assert dune.critics_score == 92
+    assert dune.audience_score == 95
+    assert dune.url == "https://www.rottentomatoes.com/m/dune_part_two"
+    assert items[2].critics_score is None
+
+
 def test_fetch_filters_by_critics_score(monkeypatch):
     source = RottenTomatoesSource(make_config(rt_min_critics_score=80))
     monkeypatch.setattr(source.session, "get",
-                        lambda url, params=None, timeout=None: FakeResponse(RT_PAGE))
+                        lambda url, timeout=None: FakeResponse(BROWSE_HTML))
     items = source.fetch()
     assert [i.title for i in items] == ["Dune: Part Two"]
-    item = items[0]
-    assert item.media_type == MOVIE
-    assert item.year == 2024
-    assert item.critics_score == 92
-    assert item.audience_score == 95
-    assert item.url == "https://www.rottentomatoes.com/m/dune_part_two"
 
 
-def test_fetch_no_thresholds_keeps_unscored(monkeypatch):
+def test_fetch_no_thresholds_keeps_all(monkeypatch):
     source = RottenTomatoesSource(
         make_config(rt_min_critics_score=0, rt_min_audience_score=0))
     monkeypatch.setattr(source.session, "get",
-                        lambda url, params=None, timeout=None: FakeResponse(RT_PAGE))
+                        lambda url, timeout=None: FakeResponse(BROWSE_HTML))
     assert len(source.fetch()) == 3
 
 
-def test_fetch_survives_schema_change(monkeypatch):
+def test_fetch_survives_layout_change(monkeypatch):
     source = RottenTomatoesSource(make_config())
     monkeypatch.setattr(source.session, "get",
-                        lambda url, params=None, timeout=None: FakeResponse({"unexpected": True}))
+                        lambda url, timeout=None: FakeResponse("<html>redesign</html>"))
     assert source.fetch() == []
 
 
-def test_score_parsing():
-    assert _score({"score": "93"}) == 93
-    assert _score({"score": 88}) == 88
-    assert _score("77") == 77
-    assert _score({"score": ""}) is None
-    assert _score({}) is None
-    assert _score(None) is None
-    assert _score({"score": "n/a"}) is None
-
-
-def test_year_extraction():
-    assert _extract_year({"releaseDateText": "Streaming Mar 26, 2024"}) == 2024
-    assert _extract_year({"publicReleaseDate": "1999-10-15"}) == 1999
-    assert _extract_year({"releaseDateText": "Coming soon"}) is None
-    assert _extract_year({}) is None
+def test_tv_list_uses_tv_media_type():
+    html = ('<a href="/tv/the_studio">'
+            '<score-pairs-deprecated criticsscore="95"></score-pairs-deprecated>'
+            '<span data-qa="discovery-media-list-item-title">The Studio</span></a>')
+    items = parse_browse_html(html, TV, "rottentomatoes")
+    assert items[0].media_type == TV
+    assert items[0].url == "https://www.rottentomatoes.com/tv/the_studio"

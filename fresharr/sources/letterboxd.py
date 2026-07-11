@@ -18,7 +18,9 @@ from ..models import MOVIE, MediaItem
 
 log = logging.getLogger(__name__)
 
-LIST_URL = "https://letterboxd.com/films/ajax/{list_path}/"
+# The /films/ajax/ endpoint is Cloudflare-gated (403 for non-browser
+# clients); the regular rendered page serves the same poster grid.
+LIST_URL = "https://letterboxd.com/films/{list_path}/"
 FILM_URL = "https://letterboxd.com/film/{slug}/"
 
 USER_AGENT = (
@@ -43,6 +45,8 @@ class LetterboxdSource:
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                      "image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         })
 
@@ -71,7 +75,9 @@ class LetterboxdSource:
         slugs = list(dict.fromkeys(_SLUG_RE.findall(resp.text)))  # ordered dedupe
         if not slugs:
             log.warning("Letterboxd list %r: no films parsed - the page layout "
-                        "may have changed", self.list_path)
+                        "may have changed. %d bytes received, data-film-slug "
+                        "present: %s", self.list_path, len(resp.text),
+                        "data-film-slug" in resp.text)
         return slugs
 
     def _fetch_film(self, slug: str) -> MediaItem | None:

@@ -1,19 +1,25 @@
 """Discovery source backed by Rotten Tomatoes' browse pages.
 
-Rotten Tomatoes has no official API. The browse pages at
-https://www.rottentomatoes.com/browse/<list> are fed by an internal JSON
-endpoint under /napi/browse/<list>, which is what this source calls. The
-list path accepts the same filter segments the website uses, e.g.:
+Rotten Tomatoes has no official API. It previously exposed an internal
+JSON endpoint under /napi/browse/<list>, but that was removed (it now
+404s), so this source scrapes the rendered browse page HTML instead:
+
+    https://www.rottentomatoes.com/browse/<list>
+
+The list path accepts the same filter segments the website uses, e.g.:
 
     movies_in_theaters/critics:certified_fresh
     movies_at_home/critics:certified_fresh~audience:upright
     tv_series_browse/critics:fresh
 
-Because this is an unofficial endpoint, the payload shape can change
-without notice; parsing is intentionally defensive and a schema change
-degrades to a logged warning rather than a crash.
+Each result tile is an <a href="/m/..."> (or /tv/...) carrying the
+Tomatometer and audience scores as attributes and the title in a
+data-qa span. The markup is unofficial and can change without notice;
+parsing is defensive and, when a page yields nothing, logs a structural
+fingerprint so a break can be diagnosed from the logs.
 """
 
+import html as html_mod
 import logging
 import re
 
@@ -24,7 +30,7 @@ from ..models import MOVIE, TV, MediaItem
 
 log = logging.getLogger(__name__)
 
-BROWSE_API = "https://www.rottentomatoes.com/napi/browse/{path}"
+BROWSE_URL = "https://www.rottentomatoes.com/browse/{path}/"
 
 # A browser-like UA is required; the default python-requests UA is blocked.
 USER_AGENT = (
@@ -32,6 +38,15 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
+# Each tile links to a title page; chunk the HTML on these anchors.
+_TILE_RE = re.compile(r'<a\b[^>]*\bhref="(/(?:m|tv)/[^"]+)"[^>]*>', re.IGNORECASE)
+_CRITICS_RE = re.compile(r'criticsscore="(\d{1,3})"', re.IGNORECASE)
+_AUDIENCE_RE = re.compile(r'audiencescore="(\d{1,3})"', re.IGNORECASE)
+_TITLE_RE = re.compile(
+    r'data-qa="discovery-media-list-item-title"[^>]*>\s*([^<]+?)\s*<', re.IGNORECASE)
+_DATE_RE = re.compile(
+    r'data-qa="discovery-media-list-item-start-date"[^>]*>\s*([^<]+?)\s*<',
+    re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 
@@ -43,12 +58,11 @@ class RottenTomatoesSource:
         self.tv_lists = config.rt_tv_lists
         self.min_critics = config.rt_min_critics_score
         self.min_audience = config.rt_min_audience_score
-        self.max_pages = max(1, config.rt_max_pages)
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
-            "Accept": "application/json",
-            "Referer": "https://www.rottentomatoes.com/browse/movies_in_theaters/",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
         })
 
     def fetch(self) -> list[MediaItem]:
@@ -66,55 +80,22 @@ class RottenTomatoesSource:
         return kept
 
     def _fetch_list(self, list_path: str, media_type: str) -> list[MediaItem]:
-        collected: list[MediaItem] = []
-        after = ""
-        url = BROWSE_API.format(path=list_path.strip("/"))
-        for page in range(self.max_pages):
-            params = {"after": after} if after else {}
-            try:
-                resp = self.session.get(url, params=params, timeout=30)
-                resp.raise_for_status()
-                data = resp.json()
-            except (requests.RequestException, ValueError) as exc:
-                log.warning("Rotten Tomatoes list %r page %d failed: %s",
-                            list_path, page + 1, exc)
-                break
-
-            grid = data.get("grid") or {}
-            raw_items = grid.get("list") or []
-            if not raw_items:
-                log.warning(
-                    "Rotten Tomatoes list %r returned no items on page %d - "
-                    "the list path may be wrong or the endpoint may have changed",
-                    list_path, page + 1,
-                )
-                break
-            for raw in raw_items:
-                item = self._parse_item(raw, media_type)
-                if item:
-                    collected.append(item)
-
-            page_info = data.get("pageInfo") or {}
-            after = page_info.get("endCursor") or ""
-            if not page_info.get("hasNextPage") or not after:
-                break
-        log.debug("Rotten Tomatoes list %r: %d items", list_path, len(collected))
-        return collected
-
-    def _parse_item(self, raw: dict, media_type: str) -> MediaItem | None:
-        title = (raw.get("title") or "").strip()
-        if not title:
-            return None
-        media_url = raw.get("mediaUrl") or ""
-        return MediaItem(
-            title=title,
-            media_type=media_type,
-            source=self.name,
-            year=_extract_year(raw),
-            critics_score=_score(raw.get("criticsScore")),
-            audience_score=_score(raw.get("audienceScore")),
-            url=f"https://www.rottentomatoes.com{media_url}" if media_url else None,
-        )
+        url = BROWSE_URL.format(path=list_path.strip("/"))
+        try:
+            resp = self.session.get(url, timeout=30)
+            resp.raise_for_status()
+            html = resp.text
+        except requests.RequestException as exc:
+            log.warning("Rotten Tomatoes list %r failed: %s", list_path, exc)
+            return []
+        items = parse_browse_html(html, media_type, self.name)
+        if not items:
+            log.warning(
+                "Rotten Tomatoes list %r: no items parsed - the list path may "
+                "be wrong or the page layout changed. %s",
+                list_path, _fingerprint(html))
+        log.debug("Rotten Tomatoes list %r: %d items", list_path, len(items))
+        return items
 
     def _passes_scores(self, item: MediaItem) -> bool:
         if self.min_critics and (item.critics_score or 0) < self.min_critics:
@@ -124,23 +105,50 @@ class RottenTomatoesSource:
         return True
 
 
-def _score(raw) -> int | None:
-    """Scores appear as {'score': '93', ...} but have also been plain values."""
-    if isinstance(raw, dict):
-        raw = raw.get("score")
-    if raw in (None, ""):
+def parse_browse_html(html: str, media_type: str, source: str) -> list[MediaItem]:
+    tiles = list(_TILE_RE.finditer(html))
+    items: list[MediaItem] = []
+    seen = set()
+    for i, tile in enumerate(tiles):
+        href = tile.group(1)
+        end = tiles[i + 1].start() if i + 1 < len(tiles) else len(html)
+        chunk = html[tile.end():end]
+        title_match = _TITLE_RE.search(chunk)
+        if not title_match:
+            continue
+        title = html_mod.unescape(title_match.group(1)).strip()
+        if not title or href in seen:
+            continue
+        seen.add(href)
+        date_match = _DATE_RE.search(chunk)
+        year = None
+        if date_match:
+            year_match = _YEAR_RE.search(date_match.group(1))
+            if year_match:
+                year = int(year_match.group(0))
+        items.append(MediaItem(
+            title=title,
+            media_type=media_type,
+            source=source,
+            year=year,
+            critics_score=_score(_CRITICS_RE.search(chunk)),
+            audience_score=_score(_AUDIENCE_RE.search(chunk)),
+            url=f"https://www.rottentomatoes.com{href}",
+        ))
+    return items
+
+
+def _score(match) -> int | None:
+    if not match:
         return None
     try:
-        return int(str(raw).strip())
-    except ValueError:
+        return int(match.group(1))
+    except (ValueError, IndexError):
         return None
 
 
-def _extract_year(raw: dict) -> int | None:
-    for field in ("releaseDateText", "publicReleaseDate", "premiereDate"):
-        value = raw.get(field)
-        if isinstance(value, str):
-            match = _YEAR_RE.search(value)
-            if match:
-                return int(match.group(0))
-    return None
+def _fingerprint(html: str) -> str:
+    """Structural summary of an unparseable page for log-based diagnosis."""
+    return (f"{len(html)} bytes; tile anchors: {len(_TILE_RE.findall(html))}; "
+            f"title spans: {len(_TITLE_RE.findall(html))}; "
+            f"criticsscore attrs: {len(_CRITICS_RE.findall(html))}")
