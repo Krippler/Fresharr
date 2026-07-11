@@ -77,17 +77,20 @@ def test_language_settings(env):
     client, settings, _ = env
     overview = client.get("/api/overview").get_json()
     assert {"code": "en", "label": "English"} in overview["language_options"]
-    assert overview["settings"]["languages"] == []
+    assert overview["settings"]["movie_languages"] == []
+    assert overview["settings"]["tv_languages"] == []
     assert overview["settings"]["anime_languages"] == []
 
     resp = client.post("/api/settings",
-                       json={"languages": ["en", "fr"],
+                       json={"movie_languages": ["en", "fr"],
+                             "tv_languages": ["ko"],
                              "anime_languages": ["ja"]})
     assert resp.status_code == 200
-    assert settings.languages == ["en", "fr"]
+    assert settings.movie_languages == ["en", "fr"]
+    assert settings.tv_languages == ["ko"]
     assert settings.anime_languages == ["ja"]
 
-    resp = client.post("/api/settings", json={"languages": ["not-a-code"]})
+    resp = client.post("/api/settings", json={"movie_languages": ["not-a-code"]})
     assert resp.status_code == 400
 
 
@@ -137,6 +140,49 @@ def test_options_editable_via_api(env):
     resp = client.post("/api/settings",
                        json={"options": {"rt_min_critics_score": 500}})
     assert resp.status_code == 400
+
+
+def test_arr_choices_endpoint(env, monkeypatch):
+    client, _, _ = env
+
+    # Unknown app 404s; unconfigured app reports configured: false
+    assert client.get("/api/arr/plex/choices").status_code == 404
+    data = client.get("/api/arr/sonarr/choices").get_json()
+    assert data == {"configured": False, "profiles": [], "root_folders": []}
+
+    # Configured app returns live profiles and root folders
+    class FakeRadarr:
+        def __init__(self, cfg):
+            pass
+
+        def _get(self, path, **params):
+            if path == "qualityprofile":
+                return [{"id": 1, "name": "HD-1080p"}, {"id": 2, "name": "4K"}]
+            if path == "rootfolder":
+                return [{"path": "/movies"}, {"path": "/movies4k"}]
+            raise AssertionError(path)
+
+    monkeypatch.setattr("fresharr.web.Radarr", FakeRadarr)
+    data = client.get("/api/arr/radarr/choices").get_json()
+    assert data["configured"] is True
+    assert [p["name"] for p in data["profiles"]] == ["HD-1080p", "4K"]
+    assert data["root_folders"] == ["/movies", "/movies4k"]
+
+    # Unreachable app degrades to an error message, not a 500
+    import requests
+
+    class BrokenRadarr:
+        def __init__(self, cfg):
+            pass
+
+        def _get(self, path, **params):
+            raise requests.ConnectionError("connection refused")
+
+    monkeypatch.setattr("fresharr.web.Radarr", BrokenRadarr)
+    data = client.get("/api/arr/radarr/choices").get_json()
+    assert data["configured"] is True
+    assert "connection refused" in data["error"]
+    assert data["profiles"] == []
 
 
 def test_tmdb_key_via_ui_marks_source_configured(env):

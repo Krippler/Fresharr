@@ -60,6 +60,7 @@ class Config:
     imdb_movie_charts: list[str] = field(default_factory=lambda: ["moviemeter"])
     imdb_tv_charts: list[str] = field(default_factory=lambda: ["tvmeter"])
     imdb_min_rating: float = 7.0
+    imdb_min_votes: int = 0
 
     # TMDB
     tmdb_api_key: str = ""
@@ -72,6 +73,7 @@ class Config:
     # Trakt
     trakt_client_id: str = ""
     trakt_min_rating: float = 7.0
+    trakt_min_votes: int = 0
     trakt_limit: int = 40
 
     # Metacritic
@@ -79,6 +81,7 @@ class Config:
 
     # Letterboxd
     letterboxd_min_rating: float = 3.5  # 0-5 stars
+    letterboxd_min_reviews: int = 0
     letterboxd_max_films: int = 30
     letterboxd_list: str = "popular/this/week"
 
@@ -87,6 +90,7 @@ class Config:
 
     # MyAnimeList (via Jikan)
     mal_min_score: float = 7.5  # 0-10
+    mal_min_votes: int = 0
 
     # Global filters / limits
     min_year: int = 0
@@ -135,6 +139,7 @@ class Config:
             imdb_movie_charts=_list("IMDB_MOVIE_CHARTS", "moviemeter"),
             imdb_tv_charts=_list("IMDB_TV_CHARTS", "tvmeter"),
             imdb_min_rating=_float("IMDB_MIN_RATING", 7.0),
+            imdb_min_votes=_int("IMDB_MIN_VOTES", 0),
             tmdb_api_key=_str("TMDB_API_KEY"),
             tmdb_min_rating=_float("TMDB_MIN_RATING", 7.5),
             tmdb_min_votes=_int("TMDB_MIN_VOTES", 50),
@@ -143,13 +148,16 @@ class Config:
             tmdb_tv=_bool("TMDB_TV", True),
             trakt_client_id=_str("TRAKT_CLIENT_ID"),
             trakt_min_rating=_float("TRAKT_MIN_RATING", 7.0),
+            trakt_min_votes=_int("TRAKT_MIN_VOTES", 0),
             trakt_limit=_int("TRAKT_LIMIT", 40),
             metacritic_min_score=_int("METACRITIC_MIN_SCORE", 75),
             letterboxd_min_rating=_float("LETTERBOXD_MIN_RATING", 3.5),
+            letterboxd_min_reviews=_int("LETTERBOXD_MIN_REVIEWS", 0),
             letterboxd_max_films=_int("LETTERBOXD_MAX_FILMS", 30),
             letterboxd_list=_str("LETTERBOXD_LIST", "popular/this/week"),
             anilist_min_score=_int("ANILIST_MIN_SCORE", 75),
             mal_min_score=_float("MAL_MIN_SCORE", 7.5),
+            mal_min_votes=_int("MAL_MIN_VOTES", 0),
             min_year=_int("MIN_YEAR", 0),
             max_items_per_run=_int("MAX_ITEMS_PER_RUN", 20),
             radarr_url=_str("RADARR_URL"),

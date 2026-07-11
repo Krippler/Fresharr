@@ -25,6 +25,9 @@ class MediaItem:
     # ISO 639-1 original language ("en", "ja", ...) where the source knows
     # it; None means unknown, which always passes the language filter.
     language: str | None = None
+    # Number of reviews/ratings/votes behind the score, where the source
+    # reports one; None means unknown.
+    votes: int | None = None
 
     @property
     def key(self) -> str:

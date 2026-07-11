@@ -37,6 +37,7 @@ class LetterboxdSource:
 
     def __init__(self, config: Config):
         self.min_rating = config.letterboxd_min_rating  # 0-5 stars
+        self.min_reviews = config.letterboxd_min_reviews
         self.max_films = config.letterboxd_max_films
         self.list_path = config.letterboxd_list.strip("/")
         self.session = requests.Session()
@@ -51,7 +52,9 @@ class LetterboxdSource:
         for slug in slugs[: self.max_films]:
             item = self._fetch_film(slug)
             if item and (not self.min_rating
-                         or (item.audience_score or 0) >= self.min_rating * 20):
+                         or (item.audience_score or 0) >= self.min_rating * 20) \
+                    and (not self.min_reviews
+                         or (item.votes or 0) >= self.min_reviews):
                 items.append(item)
         log.info("Letterboxd: examined %d popular films, %d pass rating >= %.1f/5",
                  min(len(slugs), self.max_films), len(items), self.min_rating)
@@ -84,7 +87,9 @@ class LetterboxdSource:
         title = (data.get("name") or "").strip()
         if not title:
             return None
-        rating = (data.get("aggregateRating") or {}).get("ratingValue")
+        aggregate = data.get("aggregateRating") or {}
+        rating = aggregate.get("ratingValue")
+        rating_count = aggregate.get("ratingCount")
         year = None
         for event in data.get("releasedEvent") or []:
             match = _YEAR_RE.search(str((event or {}).get("startDate", "")))
@@ -99,6 +104,7 @@ class LetterboxdSource:
             audience_score=round(float(rating) * 20)
             if isinstance(rating, (int, float)) else None,
             url=FILM_URL.format(slug=slug),
+            votes=rating_count if isinstance(rating_count, int) else None,
         )
 
 

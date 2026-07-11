@@ -10,7 +10,13 @@ NEXT_DATA = {
             "id": "tt15239678",
             "titleText": {"text": "Dune: Part Two"},
             "releaseYear": {"year": 2024},
-            "ratingsSummary": {"aggregateRating": 8.5},
+            "ratingsSummary": {"aggregateRating": 8.5, "voteCount": 500000},
+        }},
+        {"node": {
+            "id": "tt0000009",
+            "titleText": {"text": "Obscure Gem"},
+            "releaseYear": {"year": 2026},
+            "ratingsSummary": {"aggregateRating": 8.9, "voteCount": 40},
         }},
         {"node": {
             "id": "tt0000001",
@@ -57,12 +63,14 @@ def make_source(**overrides) -> ImdbSource:
 
 def test_parse_next_data_extracts_titles():
     items = parse_next_data(NEXT_HTML, MOVIE, "imdb")
-    assert [i.title for i in items] == ["Dune: Part Two", "Mediocre Movie", "Not Yet Rated"]
+    assert [i.title for i in items] == ["Dune: Part Two", "Obscure Gem",
+                                        "Mediocre Movie", "Not Yet Rated"]
     dune = items[0]
     assert dune.year == 2024
     assert dune.audience_score == 85
+    assert dune.votes == 500000
     assert dune.url == "https://www.imdb.com/title/tt15239678/"
-    assert items[2].audience_score is None
+    assert items[3].audience_score is None
 
 
 def test_fetch_filters_by_rating(monkeypatch):
@@ -70,7 +78,15 @@ def test_fetch_filters_by_rating(monkeypatch):
     monkeypatch.setattr(source.session, "get",
                         lambda url, timeout=None: FakeResponse(NEXT_HTML))
     items = source.fetch()
-    assert [i.title for i in items] == ["Dune: Part Two"]
+    assert [i.title for i in items] == ["Dune: Part Two", "Obscure Gem"]
+
+
+def test_fetch_filters_by_votes(monkeypatch):
+    source = make_source(imdb_min_rating=7.0, imdb_min_votes=1000)
+    monkeypatch.setattr(source.session, "get",
+                        lambda url, timeout=None: FakeResponse(NEXT_HTML))
+    items = source.fetch()
+    assert [i.title for i in items] == ["Dune: Part Two"]  # Obscure Gem: 40 votes
 
 
 def test_ld_json_fallback(monkeypatch):

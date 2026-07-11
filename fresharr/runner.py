@@ -33,25 +33,34 @@ def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
     if not config.sonarr_enabled:
         items = [i for i in items if i.media_type != TV]
 
-    # Original-language filters (web UI settings): one list for anime, one
-    # for everything else. Items whose source doesn't report a language
-    # always pass - dropping them would silence entire sources like Rotten
-    # Tomatoes that carry no language metadata.
-    languages = [lang.lower() for lang in getattr(settings, "languages", []) or []]
+    # Original-language filters (web UI settings): separate lists for
+    # movies, TV shows and anime. Items whose source doesn't report a
+    # language always pass - dropping them would silence entire sources
+    # like Rotten Tomatoes that carry no language metadata.
+    movie_languages = [lang.lower()
+                       for lang in getattr(settings, "movie_languages", []) or []]
+    tv_languages = [lang.lower()
+                    for lang in getattr(settings, "tv_languages", []) or []]
     anime_languages = [lang.lower()
                        for lang in getattr(settings, "anime_languages", []) or []]
-    if languages or anime_languages:
+    if movie_languages or tv_languages or anime_languages:
         def language_ok(item: MediaItem) -> bool:
-            wanted = anime_languages if item.anime else languages
+            if item.anime:
+                wanted = anime_languages
+            elif item.media_type == MOVIE:
+                wanted = movie_languages
+            else:
+                wanted = tv_languages
             return not wanted or item.language is None \
                 or item.language.lower() in wanted
 
         before = len(items)
         items = [i for i in items if language_ok(i)]
         if before != len(items):
-            log.info("Original-language filters (movies/tv: %s; anime: %s): "
+            log.info("Original-language filters (movies: %s; tv: %s; anime: %s): "
                      "%d of %d candidates kept",
-                     ", ".join(languages) or "any",
+                     ", ".join(movie_languages) or "any",
+                     ", ".join(tv_languages) or "any",
                      ", ".join(anime_languages) or "any",
                      len(items), before)
 

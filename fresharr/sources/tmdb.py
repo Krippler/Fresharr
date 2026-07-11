@@ -94,4 +94,6 @@ class TmdbSource:
             tmdb_id=int(tmdb_id),
             url=f"https://www.themoviedb.org/{'movie' if media_type == MOVIE else 'tv'}/{tmdb_id}",
             language=raw.get("original_language") or None,
+            votes=raw.get("vote_count")
+            if isinstance(raw.get("vote_count"), int) else None,
         )

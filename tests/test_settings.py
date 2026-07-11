@@ -59,29 +59,47 @@ def test_malformed_payloads_rejected(tmp_path):
 
 def test_languages_roundtrip_and_defaults(tmp_path):
     store = make_store(tmp_path)
-    assert store.languages == []       # empty = all languages
+    assert store.movie_languages == []  # empty = all languages
+    assert store.tv_languages == []
     assert store.anime_languages == []
 
-    store.update({"languages": ["en", "fr", "en"],
+    store.update({"movie_languages": ["en", "fr", "en"],
+                  "tv_languages": ["ko"],
                   "anime_languages": ["ja"]})
     reloaded = make_store(tmp_path)
-    assert reloaded.languages == ["en", "fr"]  # deduped, sorted
+    assert reloaded.movie_languages == ["en", "fr"]  # deduped, sorted
+    assert reloaded.tv_languages == ["ko"]
     assert reloaded.anime_languages == ["ja"]
 
-    # The two lists are independent
-    reloaded.update({"languages": []})
-    assert reloaded.languages == []
+    # The lists are independent
+    reloaded.update({"movie_languages": []})
+    assert reloaded.movie_languages == []
+    assert reloaded.tv_languages == ["ko"]
     assert reloaded.anime_languages == ["ja"]
+
+
+def test_legacy_combined_language_list_still_applies(tmp_path):
+    # Settings written before the movie/tv split used a single "languages"
+    # key that covered both.
+    (tmp_path / "settings.json").write_text(json.dumps({"languages": ["en"]}))
+    store = make_store(tmp_path)
+    assert store.movie_languages == ["en"]
+    assert store.tv_languages == ["en"]
+    assert store.anime_languages == []
+    # Setting a split list takes precedence over the legacy key
+    store.update({"tv_languages": ["ko"]})
+    assert store.tv_languages == ["ko"]
+    assert store.movie_languages == ["en"]
 
 
 def test_invalid_language_codes_rejected(tmp_path):
     store = make_store(tmp_path)
     with pytest.raises(SettingsError, match="Invalid language code"):
-        store.update({"languages": ["english"]})
+        store.update({"movie_languages": ["english"]})
     with pytest.raises(SettingsError, match="Invalid language code"):
         store.update({"anime_languages": ["<script>"]})
     with pytest.raises(SettingsError):
-        store.update({"languages": "en"})
+        store.update({"tv_languages": "en"})
 
 
 def test_partial_update_leaves_rest_alone(tmp_path):

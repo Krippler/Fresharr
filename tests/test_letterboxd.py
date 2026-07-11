@@ -62,6 +62,15 @@ def test_fetch_popular_films(monkeypatch):
     assert film.url == "https://letterboxd.com/film/the-substance/"
 
 
+def test_min_reviews_filter(monkeypatch):
+    # The Substance has 12345 ratings, Mediocre Movie has 100
+    source = make_source(letterboxd_min_rating=0, letterboxd_min_reviews=1000)
+    monkeypatch.setattr(source.session, "get", fake_get)
+    items = source.fetch()
+    assert [i.title for i in items] == ["The Substance"]
+    assert items[0].votes == 12345
+
+
 def test_max_films_cap(monkeypatch):
     source = make_source(letterboxd_min_rating=0, letterboxd_max_films=1)
     calls = []

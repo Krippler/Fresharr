@@ -3,9 +3,12 @@ from fresharr.models import MOVIE, TV
 from fresharr.sources.myanimelist import MyAnimeListSource
 
 SEASON_NOW = {"data": [
-    {"mal_id": 1, "type": "TV", "score": 8.8, "year": 2026,
+    {"mal_id": 1, "type": "TV", "score": 8.8, "year": 2026, "scored_by": 250000,
      "title": "Sousou no Frieren", "title_english": "Frieren: Beyond Journey's End",
      "url": "https://myanimelist.net/anime/1"},
+    {"mal_id": 5, "type": "TV", "score": 8.4, "year": 2026, "scored_by": 300,
+     "title": "Niche Favorite", "title_english": None,
+     "url": "https://myanimelist.net/anime/5"},
     {"mal_id": 2, "type": "TV", "score": 5.9, "year": 2026,
      "title": "Weak Show", "title_english": None,
      "url": "https://myanimelist.net/anime/2"},
@@ -37,23 +40,39 @@ class FakeResponse:
         return self._payload
 
 
-def test_fetch_dedupes_and_filters(monkeypatch):
+def make_source(**overrides) -> MyAnimeListSource:
     cfg = Config(radarr_url="http://x", radarr_api_key="k")
-    source = MyAnimeListSource(cfg)
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+    return MyAnimeListSource(cfg)
 
-    def fake_get(url, timeout=None):
-        return FakeResponse(SEASON_NOW if "/seasons/now" in url else TOP_AIRING)
 
+def fake_get(url, timeout=None):
+    return FakeResponse(SEASON_NOW if "/seasons/now" in url else TOP_AIRING)
+
+
+def test_fetch_dedupes_and_filters(monkeypatch):
+    source = make_source()
     monkeypatch.setattr(source.session, "get", fake_get)
     items = source.fetch()
     # Frieren once (deduped), Weak Show filtered (5.9 < 7.5), Special skipped,
     # movie kept with year from aired fallback
     assert [(i.title, i.media_type) for i in items] == [
         ("Frieren: Beyond Journey's End", TV),
+        ("Niche Favorite", TV),
         ("Great Anime Film", MOVIE),
     ]
     frieren = items[0]
     assert frieren.anime is True
     assert frieren.alt_titles == ("Sousou no Frieren",)
     assert frieren.audience_score == 88
-    assert items[1].year == 2026
+    assert frieren.votes == 250000
+    assert items[2].year == 2026
+
+
+def test_min_votes_filter(monkeypatch):
+    source = make_source(mal_min_votes=1000)
+    monkeypatch.setattr(source.session, "get", fake_get)
+    items = source.fetch()
+    # Niche Favorite (300 scored_by) and the film (no scored_by) drop out
+    assert [i.title for i in items] == ["Frieren: Beyond Journey's End"]

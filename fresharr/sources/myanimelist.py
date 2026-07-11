@@ -30,6 +30,7 @@ class MyAnimeListSource:
 
     def __init__(self, config: Config):
         self.min_score = config.mal_min_score
+        self.min_votes = config.mal_min_votes
         self.session = requests.Session()
 
     def fetch(self) -> list[MediaItem]:
@@ -51,8 +52,10 @@ class MyAnimeListSource:
                 if item:
                     if mal_id:
                         seen_ids.add(mal_id)
-                    if not self.min_score or \
-                            (item.audience_score or 0) >= self.min_score * 10:
+                    if (not self.min_score
+                            or (item.audience_score or 0) >= self.min_score * 10) \
+                            and (not self.min_votes
+                                 or (item.votes or 0) >= self.min_votes):
                         items.append(item)
         log.info("MyAnimeList: %d anime pass score >= %.1f",
                  len(items), self.min_score)
@@ -83,4 +86,6 @@ class MyAnimeListSource:
             alt_titles=alts,
             anime=True,
             language="ja",
+            votes=entry.get("scored_by")
+            if isinstance(entry.get("scored_by"), int) else None,
         )

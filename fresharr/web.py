@@ -8,9 +8,12 @@ those settings are deliberately not environment variables.
 import logging
 import time
 
+import requests
 from flask import Flask, jsonify, request
 
 from . import __version__
+from .arr.radarr import Radarr
+from .arr.sonarr import Sonarr
 from .config import Config
 from .options import GENERAL, OPTION_DEFS, RADARR, SONARR
 from .scheduler import Scheduler
@@ -90,13 +93,42 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
         log.info("Settings updated via web UI: interval %.1f day(s); sources: %s; "
-                 "languages: %s; anime languages: %s",
+                 "languages movie/tv/anime: %s / %s / %s",
                  snapshot["run_interval_days"],
                  ", ".join(n for n, e in snapshot["sources"].items() if e["enabled"])
                  or "none",
-                 ", ".join(snapshot["languages"]) or "all",
+                 ", ".join(snapshot["movie_languages"]) or "all",
+                 ", ".join(snapshot["tv_languages"]) or "all",
                  ", ".join(snapshot["anime_languages"]) or "all")
         return jsonify(snapshot)
+
+    @app.get("/api/arr/<app_name>/choices")
+    def arr_choices(app_name: str):
+        """Quality profiles and root folders fetched live from the connected
+        Radarr/Sonarr, so the UI can offer dropdowns instead of free text."""
+        effective = settings.apply_to(config)
+        if app_name == "radarr":
+            configured, factory = effective.radarr_enabled, Radarr
+        elif app_name == "sonarr":
+            configured, factory = effective.sonarr_enabled, Sonarr
+        else:
+            return jsonify({"error": f"Unknown app: {app_name}"}), 404
+        if not configured:
+            return jsonify({"configured": False, "profiles": [],
+                            "root_folders": []})
+        client = factory(effective)
+        try:
+            profiles = client._get("qualityprofile")
+            folders = client._get("rootfolder")
+        except requests.RequestException as exc:
+            return jsonify({"configured": True, "error": str(exc),
+                            "profiles": [], "root_folders": []})
+        return jsonify({
+            "configured": True,
+            "profiles": [{"id": p.get("id"), "name": p.get("name", "?")}
+                         for p in profiles],
+            "root_folders": [f.get("path", "") for f in folders],
+        })
 
     @app.post("/api/run")
     def run_now():
@@ -124,6 +156,7 @@ def _option_payloads(effective_config: Config, group: str) -> list[dict]:
             "min": defn.min,
             "max": defn.max,
             "value": value,
+            "select": defn.select,
         })
     return payloads
 
@@ -199,6 +232,7 @@ INDEX_HTML = """<!doctype html>
     font: inherit; background: #232b34; color: #dde3ea;
     border: 1px solid #333d49; border-radius: 7px; padding: .35rem .6rem;
     width: 100%; }
+  .opt select { width: 100%; padding: .35rem .6rem; }
   .optgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
              gap: .6rem .8rem; margin-top: .5rem; }
   .opt { display: flex; flex-direction: column; gap: .2rem; }
@@ -297,8 +331,11 @@ INDEX_HTML = """<!doctype html>
       all languages. Applies when a source reports the language (TMDB, Trakt,
       AniList, MyAnimeList); titles with unknown language always pass.
     </p>
-    <div class="langgroup"><span class="k">Movies &amp; TV</span>
-      <div class="langs" id="langs-main"></div>
+    <div class="langgroup"><span class="k">Movies</span>
+      <div class="langs" id="langs-movie"></div>
+    </div>
+    <div class="langgroup"><span class="k">TV shows</span>
+      <div class="langs" id="langs-tv"></div>
     </div>
     <div class="langgroup"><span class="k">Anime</span>
       <div class="langs" id="langs-anime"></div>
@@ -344,6 +381,7 @@ async function api(path, opts) {
 }
 
 function render(o) {
+  lastOverview = o;
   $("version").textContent = "v" + o.version;
   $("dryrun").hidden = !o.dry_run;
 
@@ -409,7 +447,8 @@ function render(o) {
     });
   });
 
-  renderLanguages("langs-main", "languages", o);
+  renderLanguages("langs-movie", "movie_languages", o);
+  renderLanguages("langs-tv", "tv_languages", o);
   renderLanguages("langs-anime", "anime_languages", o);
 
   const recent = $("recent");
@@ -424,18 +463,52 @@ function escapeHtml(value) {
     c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 }
 
+const arrChoices = {radarr: null, sonarr: null};
+let lastOverview = null;
+
 function optionInput(opt) {
+  // Quality profile / root folder become dropdowns fed by the connected
+  // app's API once the connection works.
+  if (opt.select) {
+    const app = opt.key.startsWith("sonarr") ? "sonarr" : "radarr";
+    const choices = arrChoices[app];
+    if (choices && choices.configured && !choices.error) {
+      const values = opt.select === "profiles"
+        ? choices.profiles.map(p => p.name) : choices.root_folders;
+      const current = String(opt.value ?? "");
+      const opts = [`<option value="">(auto: first)</option>`]
+        .concat(values.map(v =>
+          `<option value="${escapeHtml(v)}" ${v === current ? "selected" : ""}>${escapeHtml(v)}</option>`));
+      if (current && !values.includes(current))
+        opts.push(`<option value="${escapeHtml(current)}" selected>${escapeHtml(current)} (not found)</option>`);
+      return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
+        <select data-opt="${opt.key}">${opts.join("")}</select>
+        ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
+      </label>`;
+    }
+  }
   const type = opt.type === "secret" ? "password"
              : (opt.type === "str" ? "text" : "number");
   const numberAttrs = type !== "number" ? "" :
     `step="${opt.type === "float" ? "0.1" : "1"}"` +
     (opt.min != null ? ` min="${opt.min}"` : "") +
     (opt.max != null ? ` max="${opt.max}"` : "");
+  const app = opt.select ? (opt.key.startsWith("sonarr") ? "sonarr" : "radarr") : null;
+  const loadNote = opt.select && arrChoices[app] && arrChoices[app].error
+    ? `<small class="err">couldn't load choices from ${app} - check URL/API key</small>` : "";
   return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
     <input type="${type}" data-opt="${opt.key}" ${numberAttrs}
            value="${escapeHtml(opt.value ?? "")}" autocomplete="off">
-    ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
+    ${loadNote || (opt.description ? `<small>${escapeHtml(opt.description)}</small>` : "")}
   </label>`;
+}
+
+async function loadArrChoices(app) {
+  try { arrChoices[app] = await api("/api/arr/" + app + "/choices"); }
+  catch (e) { arrChoices[app] = null; }
+  const active = document.activeElement;
+  if (lastOverview && !(active && active.dataset && active.dataset.opt))
+    render(lastOverview);
 }
 
 function wireOptionInputs() {
@@ -446,7 +519,9 @@ function wireOptionInputs() {
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({options: {[input.dataset.opt]: input.value}})});
         toast("Saved");
-        refresh();
+        // A changed URL or API key invalidates the profile/folder dropdowns
+        const conn = input.dataset.opt.match(/^(radarr|sonarr)_(url|api_key)$/);
+        if (conn) loadArrChoices(conn[1]); else refresh();
       } catch (e) { toast(e.message, true); }
     });
   });
@@ -506,7 +581,7 @@ $("runnow").addEventListener("click", async () => {
   setTimeout(() => { btn.disabled = false; refresh(); }, 1500);
 });
 
-refresh();
+refresh().then(() => { loadArrChoices("radarr"); loadArrChoices("sonarr"); });
 setInterval(refresh, 15000);
 </script>
 </body>
