@@ -28,6 +28,7 @@ query ($page: Int, $perPage: Int) {
       averageScore
       seasonYear
       startDate { year }
+      countryOfOrigin
     }
   }
 }
@@ -36,6 +37,10 @@ query ($page: Int, $perPage: Int) {
 # AniList format -> Fresharr media type. OVAs and specials are skipped:
 # they rarely map cleanly onto Sonarr series.
 FORMAT_MAP = {"TV": TV, "TV_SHORT": TV, "ONA": TV, "MOVIE": MOVIE}
+
+# Country of origin -> original language (anime is Japanese unless AniList
+# says it's donghua/aeni).
+COUNTRY_LANGUAGE = {"JP": "ja", "CN": "zh", "TW": "zh", "KR": "ko"}
 
 
 class AniListSource:
@@ -94,4 +99,5 @@ class AniListSource:
             url=f"https://anilist.co/anime/{anilist_id}" if anilist_id else None,
             alt_titles=alts,
             anime=True,
+            language=COUNTRY_LANGUAGE.get(entry.get("countryOfOrigin"), "ja"),
         )

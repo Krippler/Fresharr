@@ -33,6 +33,28 @@ def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
     if not config.sonarr_enabled:
         items = [i for i in items if i.media_type != TV]
 
+    # Original-language filters (web UI settings): one list for anime, one
+    # for everything else. Items whose source doesn't report a language
+    # always pass - dropping them would silence entire sources like Rotten
+    # Tomatoes that carry no language metadata.
+    languages = [lang.lower() for lang in getattr(settings, "languages", []) or []]
+    anime_languages = [lang.lower()
+                       for lang in getattr(settings, "anime_languages", []) or []]
+    if languages or anime_languages:
+        def language_ok(item: MediaItem) -> bool:
+            wanted = anime_languages if item.anime else languages
+            return not wanted or item.language is None \
+                or item.language.lower() in wanted
+
+        before = len(items)
+        items = [i for i in items if language_ok(i)]
+        if before != len(items):
+            log.info("Original-language filters (movies/tv: %s; anime: %s): "
+                     "%d of %d candidates kept",
+                     ", ".join(languages) or "any",
+                     ", ".join(anime_languages) or "any",
+                     len(items), before)
+
     # Dedupe across sources/lists, keeping the first occurrence but preferring
     # any duplicate that carries a TMDB id (exact matching downstream).
     by_key: dict[str, MediaItem] = {}
@@ -45,6 +67,7 @@ def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
 
 def run_once(config: Config, settings: SettingsStore) -> dict:
     started = time.time()
+    config = settings.apply_to(config)  # web-UI options override env defaults
     enabled = [name for name, entry in settings.snapshot()["sources"].items()
                if entry["enabled"]]
     log.info("Starting discovery run (sources: %s, dry_run: %s)",
@@ -63,6 +86,10 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
         clients[MOVIE] = Radarr(config)
     if config.sonarr_enabled:
         clients[TV] = Sonarr(config)
+    if not clients:
+        error = ("Neither Radarr nor Sonarr is configured - add a connection "
+                 "in the web interface")
+        log.error("%s", error)
     for client in clients.values():
         try:
             client.check_connection()

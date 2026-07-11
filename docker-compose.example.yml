@@ -4,36 +4,17 @@ services:
     container_name: fresharr
     restart: unless-stopped
     ports:
-      - "8383:8383"                      # web interface (schedule + discovery sites)
+      - "8383:8383"                      # web interface - all settings live there
     environment:
-      # Radarr (movies)
-      RADARR_URL: http://radarr:7878
-      RADARR_API_KEY: your-radarr-api-key
-      # RADARR_QUALITY_PROFILE: HD-1080p # name or id; defaults to first profile
-      # RADARR_ROOT_FOLDER: /movies      # defaults to first root folder
-
-      # Sonarr (TV) - remove this block to only handle movies
-      SONARR_URL: http://sonarr:8989
-      SONARR_API_KEY: your-sonarr-api-key
-      # SONARR_QUALITY_PROFILE: HD-1080p
-      # SONARR_ROOT_FOLDER: /tv
-
-      # Score thresholds
-      RT_MIN_CRITICS_SCORE: "80"
-      RT_MIN_AUDIENCE_SCORE: "0"
-      # IMDB_MIN_RATING: "7.0"
-      # METACRITIC_MIN_SCORE: "75"
-      # LETTERBOXD_MIN_RATING: "3.5"
-      # ANILIST_MIN_SCORE: "75"         # anime (AniList site)
-      # MAL_MIN_SCORE: "7.5"            # anime (MyAnimeList site)
-      # TMDB_API_KEY: your-tmdb-api-key  # unlocks the TMDB site in the web UI
-      # TRAKT_CLIENT_ID: your-client-id  # unlocks the Trakt site in the web UI
-
-      # Behaviour
-      MAX_ITEMS_PER_RUN: "20"
       DRY_RUN: "true"                    # start in dry-run; flip to false once happy
+      # Everything else (Radarr/Sonarr connections, API keys, thresholds,
+      # languages, schedule) is configured in the web UI at http://<host>:8383.
+      # Env vars still work as defaults if you prefer them, e.g.:
+      # RADARR_URL: http://radarr:7878
+      # RADARR_API_KEY: your-radarr-api-key
+      # SONARR_URL: http://sonarr:8989
+      # SONARR_API_KEY: your-sonarr-api-key
+      # TMDB_API_KEY: your-tmdb-api-key
+      # TRAKT_CLIENT_ID: your-client-id
     volumes:
       - ./config:/config
-
-# The run schedule (daily up to monthly) and which discovery sites are
-# enabled are configured in the web UI at http://<host>:8383 - not here.

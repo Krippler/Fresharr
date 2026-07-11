@@ -187,9 +187,10 @@ class Config:
 
     def validate(self) -> None:
         if not self.radarr_enabled and not self.sonarr_enabled:
-            raise SystemExit(
-                "Nothing to do: configure at least one of Radarr "
-                "(RADARR_URL + RADARR_API_KEY) or Sonarr (SONARR_URL + SONARR_API_KEY)."
+            # Not fatal: connections can be entered in the web interface.
+            log.warning(
+                "No Radarr/Sonarr connection configured yet - open the web "
+                "interface (port %d) to add one.", self.web_port,
             )
         for legacy in ("SOURCES", "RUN_INTERVAL_DAYS", "RUN_INTERVAL_HOURS"):
             if os.environ.get(legacy):

@@ -93,4 +93,5 @@ class TmdbSource:
             audience_score=round(rating * 10) if isinstance(rating, (int, float)) else None,
             tmdb_id=int(tmdb_id),
             url=f"https://www.themoviedb.org/{'movie' if media_type == MOVIE else 'tv'}/{tmdb_id}",
+            language=raw.get("original_language") or None,
         )

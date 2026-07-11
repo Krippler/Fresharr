@@ -19,20 +19,34 @@ Community Applications template.
 
 ## The web interface
 
-Fresharr serves a web UI on port `8383`. This is where you control:
+Fresharr serves a web UI on port `8383`. **All configuration lives here** —
+the only things set on the container itself are the port, the `/config` path,
+and `DRY_RUN`. In the UI you control:
 
+- **Connections** — Radarr and Sonarr URLs, API keys, quality profiles and
+  root folders. Fields save as you leave them and apply on the next run.
 - **Which discovery sites are used** — enable or disable each site individually
-  with a toggle. Sites that need an API key show what's missing until you provide
-  it via the container's environment.
+  with a toggle, and set each site's score threshold right on its row. Sites
+  that need an API key (TMDB, Trakt) take it in the same place.
 - **The run schedule** — from once a day (the most frequent allowed) up to every
-  2–3 days, weekly, twice a month, or monthly. Discovery lists change slowly, so
-  Fresharr deliberately won't hammer the sites more than daily.
+  2–3 days, weekly, twice a month, or monthly. The interval is a target, not an
+  exact timer: each run happens at a **random time** around it (±6 hours), and
+  never less than 18 hours after the previous run — so with the daily preset,
+  runs land somewhere between 18 and 30 hours apart, at a different time of day
+  each cycle. This randomization is built in and not configurable.
+- **Original language** — separate multi-select filters for **Movies & TV** and
+  for **Anime**. Only titles whose original language is selected get added;
+  nothing selected means all languages. Applies where the source reports a
+  language (TMDB, Trakt, AniList, MyAnimeList); the scraped review sites don't
+  carry language metadata, so their titles always pass.
+- **Limits** — max additions per run and minimum release year.
 - **Run now** — trigger a discovery pass immediately.
 - Status: last/next run, what was added, and recent additions.
 
-Schedule and site selection are stored in `/config/settings.json` and take effect
-immediately — no container restart, and they're deliberately *not* environment
-variables.
+Everything is stored in `/config/settings.json` and takes effect immediately —
+no container restart. Environment variables still work as *defaults* (handy for
+docker-compose), but a value set in the UI always wins; clearing a UI field
+falls back to the environment value.
 
 ## Discovery sites
 
@@ -64,10 +78,12 @@ layout, Fresharr logs a warning and carries on with the other sources.
 
 ## How it works
 
-On the schedule you set in the web UI, Fresharr:
+Around the cadence you set in the web UI (randomized, minimum 18 hours between
+runs), Fresharr:
 
 1. Fetches candidate titles from every **enabled** discovery site.
-2. Filters by your score/year thresholds and dedupes across sites.
+2. Filters by your score/year thresholds and language selections, and dedupes
+   across sites.
 3. Looks each title up in Radarr (movies) / Sonarr (TV), skips anything already in
    your library, and adds the rest with your chosen quality profile and root folder
    (optionally triggering a search immediately).
@@ -105,83 +121,47 @@ See [docker-compose.example.yml](docker-compose.example.yml) for every option.
 1. Install from Community Applications (or add the template manually:
    copy [`unraid/fresharr.xml`](unraid/fresharr.xml) to
    `/boot/config/plugins/dockerMan/templates-user/` and add the container via
-   **Docker → Add Container**).
-2. Fill in your Radarr/Sonarr URLs and API keys (Settings → General → API Key).
-3. Open the **WebUI** from the container's context menu to choose your discovery
-   sites and schedule.
-4. Leave **Dry Run** on `true` for the first run and check the container log to see
+   **Docker → Add Container**). The template only asks for the port, appdata
+   path and Dry Run — everything else is configured in the web UI.
+2. Open the **WebUI** from the container's context menu and enter your
+   Radarr/Sonarr URLs and API keys (Settings → General → API Key in each app),
+   then pick your discovery sites, thresholds, languages and schedule.
+3. Leave **Dry Run** on `true` for the first run and check the container log to see
    what would be added; set it to `false` when you're happy with the picks.
 
 The container runs as `nobody:users` (99:100), matching Unraid appdata conventions.
 
-## Configuration (environment variables)
+## Configuration
 
-Connections, credentials, and score thresholds are environment variables.
-The run schedule and per-site toggles are **web UI only** (see above).
+**Set in the web interface** (stored in `/config/settings.json`, applied
+without a restart): Radarr/Sonarr URLs, API keys, quality profiles and root
+folders; every site's score threshold; TMDB API key and Trakt client ID;
+Rotten Tomatoes list paths; max additions per run; minimum release year;
+original-language filters; per-site toggles; and the run schedule.
 
-### Connections
-
-| Variable | Default | Description |
-|---|---|---|
-| `RADARR_URL` | – | Radarr base URL, e.g. `http://192.168.1.100:7878`. Empty disables movies. |
-| `RADARR_API_KEY` | – | Radarr API key. |
-| `SONARR_URL` | – | Sonarr base URL. Empty disables TV. |
-| `SONARR_API_KEY` | – | Sonarr API key. |
-| `WEB_PORT` | `8383` | Port for the web interface. |
-
-At least one of Radarr/Sonarr must be configured.
-
-### Site thresholds
-
-| Variable | Default | Description |
-|---|---|---|
-| `RT_MIN_CRITICS_SCORE` | `80` | Minimum Tomatometer score (0–100, 0 = ignore). |
-| `RT_MIN_AUDIENCE_SCORE` | `0` | Minimum audience score (0–100, 0 = ignore). |
-| `RT_MOVIE_LISTS` | `movies_in_theaters/critics:certified_fresh,movies_at_home/critics:certified_fresh` | Rotten Tomatoes browse paths for movies — the part of the URL after `rottentomatoes.com/browse/`. |
-| `RT_TV_LISTS` | `tv_series_browse/critics:fresh` | Browse paths for TV shows. |
-| `RT_MAX_PAGES` | `2` | Pages fetched per list (~30 titles per page). |
-| `IMDB_MIN_RATING` | `7.0` | Minimum IMDb rating (0–10). |
-| `IMDB_MOVIE_CHARTS` | `moviemeter` | IMDb chart paths for movies. |
-| `IMDB_TV_CHARTS` | `tvmeter` | IMDb chart paths for TV. |
-| `TMDB_API_KEY` | – | Unlocks the TMDB site in the web UI. |
-| `TMDB_MIN_RATING` | `7.5` | Minimum TMDB rating (0–10). |
-| `TMDB_MIN_VOTES` | `50` | Minimum number of votes (filters out obscure/unrated titles). |
-| `TMDB_RELEASED_WITHIN_DAYS` | `90` | Only consider titles released in the last N days. |
-| `TMDB_MOVIES` / `TMDB_TV` | `true` | Toggle movie/TV discovery for the TMDB site. |
-| `TRAKT_CLIENT_ID` | – | Unlocks the Trakt site in the web UI. |
-| `TRAKT_MIN_RATING` | `7.0` | Minimum Trakt rating (0–10). |
-| `TRAKT_LIMIT` | `40` | Trending items fetched per media type. |
-| `METACRITIC_MIN_SCORE` | `75` | Minimum Metascore (0–100). |
-| `LETTERBOXD_MIN_RATING` | `3.5` | Minimum Letterboxd star rating (0–5). |
-| `LETTERBOXD_MAX_FILMS` | `30` | Popular films examined per run (each needs one page fetch for its rating). |
-| `LETTERBOXD_LIST` | `popular/this/week` | Letterboxd films list to read. |
-| `ANILIST_MIN_SCORE` | `75` | Minimum AniList score (0–100). |
-| `MAL_MIN_SCORE` | `7.5` | Minimum MyAnimeList score (0–10). |
-| `MIN_YEAR` | – | Ignore titles released before this year. |
-
-### Adding behaviour
-
-| Variable | Default | Description |
-|---|---|---|
-| `RADARR_QUALITY_PROFILE` | first profile | Profile name or id. |
-| `RADARR_ROOT_FOLDER` | first root folder | Root folder path as configured in Radarr. |
-| `RADARR_MONITORED` | `true` | Add movies as monitored. |
-| `RADARR_SEARCH_ON_ADD` | `true` | Trigger a search right after adding. |
-| `RADARR_MINIMUM_AVAILABILITY` | `released` | `announced`, `inCinemas` or `released`. |
-| `SONARR_QUALITY_PROFILE` | first profile | Profile name or id. |
-| `SONARR_ROOT_FOLDER` | first root folder | Root folder path as configured in Sonarr. |
-| `SONARR_MONITORED` | `true` | Add series as monitored. |
-| `SONARR_SEARCH_ON_ADD` | `true` | Search for missing episodes after adding. |
-
-### Runtime
+**Environment variables** cover runtime behaviour and advanced tuning. Any
+UI-editable setting can *also* be provided as an env var (same names as before,
+e.g. `RADARR_URL`, `RT_MIN_CRITICS_SCORE`) — the env value acts as the default
+and the UI value overrides it.
 
 | Variable | Default | Description |
 |---|---|---|
 | `DRY_RUN` | `false` | Log what would be added without touching Radarr/Sonarr. |
 | `RUN_ONCE` | `false` | Single discovery pass, no web server, then exit (for external schedulers). |
-| `MAX_ITEMS_PER_RUN` | `20` | Safety cap on additions per run. |
-| `RETRY_NOT_FOUND_DAYS` | `7` | Re-try titles that had no Radarr/Sonarr match after this many days. |
+| `WEB_PORT` | `8383` | Port for the web interface. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `RETRY_NOT_FOUND_DAYS` | `7` | Re-try titles that had no Radarr/Sonarr match after this many days. |
+| `RT_MAX_PAGES` | `2` | Rotten Tomatoes pages fetched per list (~30 titles per page). |
+| `IMDB_MOVIE_CHARTS` / `IMDB_TV_CHARTS` | `moviemeter` / `tvmeter` | IMDb chart paths. |
+| `TMDB_MIN_VOTES` | `50` | Minimum TMDB vote count (filters out obscure titles). |
+| `TMDB_RELEASED_WITHIN_DAYS` | `90` | TMDB: only titles released in the last N days. |
+| `TMDB_MOVIES` / `TMDB_TV` | `true` | Toggle movie/TV discovery for the TMDB site. |
+| `TRAKT_LIMIT` | `40` | Trakt trending items fetched per media type. |
+| `LETTERBOXD_MAX_FILMS` | `30` | Popular films examined per run (each needs one page fetch). |
+| `LETTERBOXD_LIST` | `popular/this/week` | Letterboxd films list to read. |
+| `RADARR_MONITORED` / `SONARR_MONITORED` | `true` | Add titles as monitored. |
+| `RADARR_SEARCH_ON_ADD` / `SONARR_SEARCH_ON_ADD` | `true` | Trigger a search right after adding. |
+| `RADARR_MINIMUM_AVAILABILITY` | `released` | `announced`, `inCinemas` or `released`. |
 
 ## Running from source
 

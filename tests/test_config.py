@@ -13,10 +13,12 @@ def _clear_env(monkeypatch):
             monkeypatch.delenv(key, raising=False)
 
 
-def test_requires_at_least_one_arr(monkeypatch):
+def test_no_arr_config_is_not_fatal(monkeypatch):
+    # Connections can be entered later in the web UI, so startup must not
+    # exit when the environment carries no Radarr/Sonarr settings.
     _clear_env(monkeypatch)
-    with pytest.raises(SystemExit):
-        Config.from_env()
+    cfg = Config.from_env()
+    assert not cfg.radarr_enabled and not cfg.sonarr_enabled
 
 
 def test_minimal_radarr_config(monkeypatch):

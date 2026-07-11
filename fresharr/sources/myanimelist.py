@@ -82,4 +82,5 @@ class MyAnimeListSource:
             url=entry.get("url"),
             alt_titles=alts,
             anime=True,
+            language="ja",
         )

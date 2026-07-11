@@ -12,6 +12,7 @@ from flask import Flask, jsonify, request
 
 from . import __version__
 from .config import Config
+from .options import GENERAL, OPTION_DEFS, RADARR, SONARR
 from .scheduler import Scheduler
 from .settings import SettingsError, SettingsStore
 from .sources import describe_sources
@@ -19,6 +20,25 @@ from .state import State
 from .status import load_status
 
 log = logging.getLogger(__name__)
+
+# Choices offered by the original-language menu. Sources that don't report
+# a language (the scraped review sites) are unaffected by this filter.
+LANGUAGE_OPTIONS = [
+    {"code": "en", "label": "English"},
+    {"code": "ja", "label": "Japanese"},
+    {"code": "ko", "label": "Korean"},
+    {"code": "zh", "label": "Chinese"},
+    {"code": "es", "label": "Spanish"},
+    {"code": "fr", "label": "French"},
+    {"code": "de", "label": "German"},
+    {"code": "it", "label": "Italian"},
+    {"code": "pt", "label": "Portuguese"},
+    {"code": "hi", "label": "Hindi"},
+    {"code": "ru", "label": "Russian"},
+    {"code": "sv", "label": "Swedish"},
+    {"code": "da", "label": "Danish"},
+    {"code": "no", "label": "Norwegian"},
+]
 
 
 def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) -> Flask:
@@ -34,19 +54,29 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
 
     @app.get("/api/overview")
     def overview():
+        effective = settings.apply_to(config)
         status = load_status(config.status_file)
         recent = _recent_additions(config)
+        sources = describe_sources(effective, settings)
+        for source in sources:
+            source["options"] = _option_payloads(effective, source["name"])
         return jsonify({
             "version": __version__,
             "settings": settings.snapshot(),
-            "sources": describe_sources(config, settings),
+            "language_options": LANGUAGE_OPTIONS,
+            "sources": sources,
+            "connections": {
+                "radarr": _option_payloads(effective, RADARR),
+                "sonarr": _option_payloads(effective, SONARR),
+            },
+            "general_options": _option_payloads(effective, GENERAL),
             "last_run": status or None,
             "next_run_at": int(scheduler.next_run_at()),
             "running": scheduler.running,
             "dry_run": config.dry_run,
             "arr": {
-                "radarr": config.radarr_enabled,
-                "sonarr": config.sonarr_enabled,
+                "radarr": effective.radarr_enabled,
+                "sonarr": effective.sonarr_enabled,
             },
             "recent_additions": recent,
             "server_time": int(time.time()),
@@ -59,10 +89,13 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             snapshot = settings.update(payload)
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
-        log.info("Settings updated via web UI: interval %.1f day(s), sources: %s",
+        log.info("Settings updated via web UI: interval %.1f day(s); sources: %s; "
+                 "languages: %s; anime languages: %s",
                  snapshot["run_interval_days"],
                  ", ".join(n for n, e in snapshot["sources"].items() if e["enabled"])
-                 or "none")
+                 or "none",
+                 ", ".join(snapshot["languages"]) or "all",
+                 ", ".join(snapshot["anime_languages"]) or "all")
         return jsonify(snapshot)
 
     @app.post("/api/run")
@@ -73,6 +106,26 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
         return jsonify({"requested": True})
 
     return app
+
+
+def _option_payloads(effective_config: Config, group: str) -> list[dict]:
+    payloads = []
+    for defn in OPTION_DEFS:
+        if defn.group != group:
+            continue
+        value = getattr(effective_config, defn.key, "")
+        if defn.is_list and isinstance(value, list):
+            value = ", ".join(value)
+        payloads.append({
+            "key": defn.key,
+            "label": defn.label,
+            "type": defn.type,
+            "description": defn.description,
+            "min": defn.min,
+            "max": defn.max,
+            "value": value,
+        })
+    return payloads
 
 
 def _recent_additions(config: Config, limit: int = 15) -> list[dict]:
@@ -142,6 +195,30 @@ INDEX_HTML = """<!doctype html>
   .muted { color: #6b7684; font-size: .85rem; }
   .err { color: #e07a7a; }
   .dry { color: #d8b44a; font-size: .8rem; }
+  input[type=text], input[type=password], input[type=number] {
+    font: inherit; background: #232b34; color: #dde3ea;
+    border: 1px solid #333d49; border-radius: 7px; padding: .35rem .6rem;
+    width: 100%; }
+  .optgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+             gap: .6rem .8rem; margin-top: .5rem; }
+  .opt { display: flex; flex-direction: column; gap: .2rem; }
+  .opt > span { font-size: .75rem; color: #8b96a5; }
+  .opt small { color: #6b7684; font-size: .72rem; }
+  .conns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+           gap: 1.2rem; }
+  .conn h3 { font-size: .95rem; margin-bottom: .4rem; }
+  .conn .state { font-size: .75rem; margin-left: .4rem; }
+  .state.ok { color: #7bd88f; } .state.off { color: #6b7684; }
+  .srcopts { margin-top: .4rem; }
+  .srcopts .optgrid { margin-top: .2rem; }
+  .langgroup { margin-top: .6rem; }
+  .langgroup .k { color: #8b96a5; font-size: .75rem; text-transform: uppercase;
+                  letter-spacing: .06em; display: block; margin-bottom: .4rem; }
+  .langs { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .lang { border: 1px solid #333d49; border-radius: 99px; padding: .25rem .75rem;
+          cursor: pointer; font-size: .85rem; color: #8b96a5; user-select: none; }
+  .lang.on { background: #2f6b3d; border-color: #3a8049; color: #eafff0; }
+  .lang input { display: none; }
   ul.recent { list-style: none; }
   ul.recent li { padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
   ul.recent li:first-child { border-top: none; }
@@ -182,14 +259,50 @@ INDEX_HTML = """<!doctype html>
       <button class="primary" id="runnow">Run now</button>
     </div>
     <p class="muted" style="margin-top:.5rem">
-      Daily is the most frequent schedule &mdash; discovery lists change slowly
-      and the sites don't need more traffic.
+      Runs happen at a <strong>random time</strong> around your chosen interval
+      &mdash; never less than 18 hours apart &mdash; so the discovery sites
+      aren't hit at one predictable hour. Daily is the most frequent schedule.
     </p>
+  </div>
+
+  <div class="card">
+    <h2>Connections</h2>
+    <p class="muted">Changes save as you leave each field and apply on the
+      next run. Clear a field to fall back to the container's environment
+      default.</p>
+    <div class="conns">
+      <div class="conn"><h3>Radarr <span class="muted">(movies)</span><span class="state" id="radarr-state"></span></h3>
+        <div class="optgrid" id="conn-radarr"></div>
+      </div>
+      <div class="conn"><h3>Sonarr <span class="muted">(TV)</span><span class="state" id="sonarr-state"></span></h3>
+        <div class="optgrid" id="conn-sonarr"></div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
     <h2>Discovery sites</h2>
     <div id="sources"></div>
+  </div>
+
+  <div class="card">
+    <h2>Limits</h2>
+    <div class="optgrid" id="general"></div>
+  </div>
+
+  <div class="card">
+    <h2>Original language</h2>
+    <p class="muted">
+      Only add titles whose original language is selected. Nothing selected =
+      all languages. Applies when a source reports the language (TMDB, Trakt,
+      AniList, MyAnimeList); titles with unknown language always pass.
+    </p>
+    <div class="langgroup"><span class="k">Movies &amp; TV</span>
+      <div class="langs" id="langs-main"></div>
+    </div>
+    <div class="langgroup"><span class="k">Anime</span>
+      <div class="langs" id="langs-anime"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -265,9 +378,11 @@ function render(o) {
     <div class="source">
       <div class="info">
         <span class="name">${s.label}</span>
-        ${!s.configured ? `<span class="badge">needs ${s.requires}</span>` : ""}
+        ${!s.configured ? `<span class="badge">needs ${s.requires.replaceAll("_", " ").toLowerCase()} below</span>` : ""}
         <div class="desc">${s.description}</div>
-        <div class="detail">${s.detail}</div>
+        <div class="srcopts"><div class="optgrid">
+          ${s.options.map(optionInput).join("")}
+        </div></div>
       </div>
       <label class="switch">
         <input type="checkbox" data-source="${s.name}"
@@ -275,6 +390,13 @@ function render(o) {
         <span class="slider"></span>
       </label>
     </div>`).join("")).join("");
+
+  $("conn-radarr").innerHTML = o.connections.radarr.map(optionInput).join("");
+  $("conn-sonarr").innerHTML = o.connections.sonarr.map(optionInput).join("");
+  $("general").innerHTML = o.general_options.map(optionInput).join("");
+  setState("radarr-state", o.arr.radarr);
+  setState("sonarr-state", o.arr.sonarr);
+  wireOptionInputs();
 
   document.querySelectorAll("[data-source]").forEach(box => {
     box.addEventListener("change", async () => {
@@ -287,6 +409,9 @@ function render(o) {
     });
   });
 
+  renderLanguages("langs-main", "languages", o);
+  renderLanguages("langs-anime", "anime_languages", o);
+
   const recent = $("recent");
   recent.innerHTML = (o.recent_additions && o.recent_additions.length)
     ? o.recent_additions.map(r =>
@@ -294,7 +419,71 @@ function render(o) {
     : '<li class="muted">Nothing yet.</li>';
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g,
+    c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+}
+
+function optionInput(opt) {
+  const type = opt.type === "secret" ? "password"
+             : (opt.type === "str" ? "text" : "number");
+  const numberAttrs = type !== "number" ? "" :
+    `step="${opt.type === "float" ? "0.1" : "1"}"` +
+    (opt.min != null ? ` min="${opt.min}"` : "") +
+    (opt.max != null ? ` max="${opt.max}"` : "");
+  return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
+    <input type="${type}" data-opt="${opt.key}" ${numberAttrs}
+           value="${escapeHtml(opt.value ?? "")}" autocomplete="off">
+    ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
+  </label>`;
+}
+
+function wireOptionInputs() {
+  document.querySelectorAll("[data-opt]").forEach(input => {
+    input.addEventListener("change", async () => {
+      try {
+        await api("/api/settings", {method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({options: {[input.dataset.opt]: input.value}})});
+        toast("Saved");
+        refresh();
+      } catch (e) { toast(e.message, true); }
+    });
+  });
+}
+
+function setState(elementId, configured) {
+  const el = $(elementId);
+  el.textContent = configured ? "configured" : "not configured";
+  el.className = "state " + (configured ? "ok" : "off");
+}
+
+function renderLanguages(elementId, settingKey, o) {
+  const selected = new Set(o.settings[settingKey] || []);
+  const container = $(elementId);
+  container.innerHTML = o.language_options.map(l => `
+    <label class="lang ${selected.has(l.code) ? "on" : ""}">
+      <input type="checkbox" value="${l.code}" ${selected.has(l.code) ? "checked" : ""}>
+      ${l.label}
+    </label>`).join("");
+  container.querySelectorAll("input").forEach(box => {
+    box.addEventListener("change", async () => {
+      const codes = [...container.querySelectorAll("input:checked")].map(b => b.value);
+      try {
+        await api("/api/settings", {method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({[settingKey]: codes})});
+        box.closest(".lang").classList.toggle("on", box.checked);
+        toast(codes.length ? "Languages: " + codes.join(", ") : "All languages");
+      } catch (e) { toast(e.message, true); box.checked = !box.checked; }
+    });
+  });
+}
+
 async function refresh() {
+  // Don't re-render while the user is typing in a settings field
+  const active = document.activeElement;
+  if (active && active.dataset && active.dataset.opt) return;
   try { render(await api("/api/overview")); }
   catch (e) { toast("Failed to load: " + e.message, true); }
 }

@@ -22,6 +22,9 @@ class MediaItem:
     # Anime series are added to Sonarr with seriesType "anime" so episodes
     # get absolute numbering.
     anime: bool = False
+    # ISO 639-1 original language ("en", "ja", ...) where the source knows
+    # it; None means unknown, which always passes the language filter.
+    language: str | None = None
 
     @property
     def key(self) -> str:

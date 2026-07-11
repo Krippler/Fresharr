@@ -57,6 +57,33 @@ def test_malformed_payloads_rejected(tmp_path):
         store.update(None)
 
 
+def test_languages_roundtrip_and_defaults(tmp_path):
+    store = make_store(tmp_path)
+    assert store.languages == []       # empty = all languages
+    assert store.anime_languages == []
+
+    store.update({"languages": ["en", "fr", "en"],
+                  "anime_languages": ["ja"]})
+    reloaded = make_store(tmp_path)
+    assert reloaded.languages == ["en", "fr"]  # deduped, sorted
+    assert reloaded.anime_languages == ["ja"]
+
+    # The two lists are independent
+    reloaded.update({"languages": []})
+    assert reloaded.languages == []
+    assert reloaded.anime_languages == ["ja"]
+
+
+def test_invalid_language_codes_rejected(tmp_path):
+    store = make_store(tmp_path)
+    with pytest.raises(SettingsError, match="Invalid language code"):
+        store.update({"languages": ["english"]})
+    with pytest.raises(SettingsError, match="Invalid language code"):
+        store.update({"anime_languages": ["<script>"]})
+    with pytest.raises(SettingsError):
+        store.update({"languages": "en"})
+
+
 def test_partial_update_leaves_rest_alone(tmp_path):
     store = make_store(tmp_path)
     store.update({"run_interval_days": 3})
@@ -72,3 +99,47 @@ def test_corrupt_file_falls_back_to_defaults(tmp_path):
     store = make_store(tmp_path)
     assert store.run_interval_days == 1.0
     assert store.is_enabled("rottentomatoes")
+
+
+def test_options_override_env_config(tmp_path):
+    from fresharr.config import Config
+    store = make_store(tmp_path)
+    store.update({"options": {
+        "radarr_url": "http://radarr:7878/",
+        "radarr_api_key": "ui-key",
+        "rt_min_critics_score": "90",
+        "imdb_min_rating": 8.5,
+        "rt_movie_lists": "movies_in_theaters, movies_at_home",
+    }})
+
+    env_config = Config(tmdb_api_key="env-tmdb")
+    effective = make_store(tmp_path).apply_to(env_config)
+    assert effective.radarr_url == "http://radarr:7878/"
+    assert effective.radarr_api_key == "ui-key"
+    assert effective.radarr_enabled
+    assert effective.rt_min_critics_score == 90       # coerced to int
+    assert effective.imdb_min_rating == 8.5
+    assert effective.rt_movie_lists == ["movies_in_theaters", "movies_at_home"]
+    assert effective.tmdb_api_key == "env-tmdb"       # env value untouched
+    assert env_config.rt_min_critics_score == 80      # original not mutated
+
+
+def test_option_cleared_falls_back_to_env(tmp_path):
+    from fresharr.config import Config
+    store = make_store(tmp_path)
+    store.update({"options": {"rt_min_critics_score": 90}})
+    store.update({"options": {"rt_min_critics_score": ""}})  # cleared in UI
+    assert store.apply_to(Config()).rt_min_critics_score == 80
+    assert "rt_min_critics_score" not in store.options()
+
+
+def test_option_validation(tmp_path):
+    store = make_store(tmp_path)
+    with pytest.raises(SettingsError, match="Unknown option"):
+        store.update({"options": {"not_an_option": 1}})
+    with pytest.raises(SettingsError, match="at most"):
+        store.update({"options": {"rt_min_critics_score": 150}})
+    with pytest.raises(SettingsError, match="at least"):
+        store.update({"options": {"max_items_per_run": 0}})
+    with pytest.raises(SettingsError, match="must be a number"):
+        store.update({"options": {"imdb_min_rating": "high"}})

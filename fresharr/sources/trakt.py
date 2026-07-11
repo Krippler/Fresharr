@@ -79,4 +79,5 @@ class TraktSource:
             audience_score=round(rating * 10) if isinstance(rating, (int, float)) else None,
             tmdb_id=ids.get("tmdb") if isinstance(ids.get("tmdb"), int) else None,
             url=f"https://trakt.tv/{kind}/{slug}" if slug else None,
+            language=media.get("language") or None,
         )

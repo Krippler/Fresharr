@@ -73,6 +73,24 @@ def test_interval_update_and_clamp(env):
     assert data["run_interval_days"] == 1.0  # clamped, not errored
 
 
+def test_language_settings(env):
+    client, settings, _ = env
+    overview = client.get("/api/overview").get_json()
+    assert {"code": "en", "label": "English"} in overview["language_options"]
+    assert overview["settings"]["languages"] == []
+    assert overview["settings"]["anime_languages"] == []
+
+    resp = client.post("/api/settings",
+                       json={"languages": ["en", "fr"],
+                             "anime_languages": ["ja"]})
+    assert resp.status_code == 200
+    assert settings.languages == ["en", "fr"]
+    assert settings.anime_languages == ["ja"]
+
+    resp = client.post("/api/settings", json={"languages": ["not-a-code"]})
+    assert resp.status_code == 400
+
+
 def test_unknown_source_is_400(env):
     client, _, _ = env
     resp = client.post("/api/settings",
@@ -92,3 +110,42 @@ def test_run_now(env):
 def test_health(env):
     client, _, _ = env
     assert client.get("/health").get_json()["status"] == "ok"
+
+
+def test_options_editable_via_api(env):
+    client, settings, _ = env
+    overview = client.get("/api/overview").get_json()
+    radarr_keys = {opt["key"] for opt in overview["connections"]["radarr"]}
+    assert {"radarr_url", "radarr_api_key",
+            "radarr_quality_profile", "radarr_root_folder"} <= radarr_keys
+    general_keys = {opt["key"] for opt in overview["general_options"]}
+    assert {"max_items_per_run", "min_year"} <= general_keys
+    rt = next(s for s in overview["sources"] if s["name"] == "rottentomatoes")
+    assert {"rt_min_critics_score", "rt_min_audience_score"} <= \
+        {opt["key"] for opt in rt["options"]}
+
+    resp = client.post("/api/settings",
+                       json={"options": {"rt_min_critics_score": 90}})
+    assert resp.status_code == 200
+    assert settings.options()["rt_min_critics_score"] == 90
+    overview = client.get("/api/overview").get_json()
+    rt = next(s for s in overview["sources"] if s["name"] == "rottentomatoes")
+    value = next(o["value"] for o in rt["options"]
+                 if o["key"] == "rt_min_critics_score")
+    assert value == 90
+
+    resp = client.post("/api/settings",
+                       json={"options": {"rt_min_critics_score": 500}})
+    assert resp.status_code == 400
+
+
+def test_tmdb_key_via_ui_marks_source_configured(env):
+    client, _, _ = env
+    overview = client.get("/api/overview").get_json()
+    tmdb = next(s for s in overview["sources"] if s["name"] == "tmdb")
+    assert not tmdb["configured"]
+
+    client.post("/api/settings", json={"options": {"tmdb_api_key": "abc123"}})
+    overview = client.get("/api/overview").get_json()
+    tmdb = next(s for s in overview["sources"] if s["name"] == "tmdb")
+    assert tmdb["configured"]
