@@ -44,7 +44,7 @@ class FakeResponse:
 
 
 def make_config(**overrides) -> Config:
-    cfg = Config(sources=["rottentomatoes"], radarr_url="http://x", radarr_api_key="k")
+    cfg = Config(radarr_url="http://x", radarr_api_key="k")
     cfg.rt_movie_lists = ["movies_in_theaters/critics:certified_fresh"]
     cfg.rt_tv_lists = []
     for key, value in overrides.items():

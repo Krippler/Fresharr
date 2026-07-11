@@ -54,8 +54,7 @@ LOOKUP_RESULT = [{"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134,
 
 
 def make_radarr(routes) -> tuple[Radarr, FakeSession]:
-    cfg = Config(sources=["rottentomatoes"],
-                 radarr_url="http://radarr:7878", radarr_api_key="k")
+    cfg = Config(radarr_url="http://radarr:7878", radarr_api_key="k")
     radarr = Radarr(cfg)
     session = FakeSession(routes)
     radarr.session = session

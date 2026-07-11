@@ -1,3 +1,11 @@
+"""Environment-variable configuration, fixed at container start.
+
+Connections, credentials, and filter thresholds live here. Scheduling
+(run interval) and which discovery sources are enabled deliberately do
+NOT: those are managed at runtime through the web interface and stored
+in /config/settings.json (see settings.py).
+"""
+
 import logging
 import os
 from dataclasses import dataclass, field
@@ -41,15 +49,17 @@ def _list(name: str, default: str) -> list[str]:
 
 @dataclass
 class Config:
-    # Which discovery sources to use
-    sources: list[str] = field(default_factory=list)
-
     # Rotten Tomatoes
     rt_movie_lists: list[str] = field(default_factory=list)
     rt_tv_lists: list[str] = field(default_factory=list)
     rt_min_critics_score: int = 80
     rt_min_audience_score: int = 0
     rt_max_pages: int = 2
+
+    # IMDb
+    imdb_movie_charts: list[str] = field(default_factory=lambda: ["moviemeter"])
+    imdb_tv_charts: list[str] = field(default_factory=lambda: ["tvmeter"])
+    imdb_min_rating: float = 7.0
 
     # TMDB
     tmdb_api_key: str = ""
@@ -58,6 +68,11 @@ class Config:
     tmdb_released_within_days: int = 90
     tmdb_movies: bool = True
     tmdb_tv: bool = True
+
+    # Trakt
+    trakt_client_id: str = ""
+    trakt_min_rating: float = 7.0
+    trakt_limit: int = 40
 
     # Global filters / limits
     min_year: int = 0
@@ -83,16 +98,17 @@ class Config:
     # Runtime behaviour
     dry_run: bool = False
     run_once: bool = False
-    run_interval_days: float = 1.0  # never runs more often than daily
     retry_not_found_days: int = 7
+    web_port: int = 8383
     state_file: str = ""
+    settings_file: str = ""
+    status_file: str = ""
     log_level: str = "INFO"
 
     @classmethod
     def from_env(cls) -> "Config":
         config_dir = _str("CONFIG_DIR", "/config")
         cfg = cls(
-            sources=[s.lower() for s in _list("SOURCES", "rottentomatoes")],
             rt_movie_lists=_list(
                 "RT_MOVIE_LISTS",
                 "movies_in_theaters/critics:certified_fresh,"
@@ -102,12 +118,18 @@ class Config:
             rt_min_critics_score=_int("RT_MIN_CRITICS_SCORE", 80),
             rt_min_audience_score=_int("RT_MIN_AUDIENCE_SCORE", 0),
             rt_max_pages=_int("RT_MAX_PAGES", 2),
+            imdb_movie_charts=_list("IMDB_MOVIE_CHARTS", "moviemeter"),
+            imdb_tv_charts=_list("IMDB_TV_CHARTS", "tvmeter"),
+            imdb_min_rating=_float("IMDB_MIN_RATING", 7.0),
             tmdb_api_key=_str("TMDB_API_KEY"),
             tmdb_min_rating=_float("TMDB_MIN_RATING", 7.5),
             tmdb_min_votes=_int("TMDB_MIN_VOTES", 50),
             tmdb_released_within_days=_int("TMDB_RELEASED_WITHIN_DAYS", 90),
             tmdb_movies=_bool("TMDB_MOVIES", True),
             tmdb_tv=_bool("TMDB_TV", True),
+            trakt_client_id=_str("TRAKT_CLIENT_ID"),
+            trakt_min_rating=_float("TRAKT_MIN_RATING", 7.0),
+            trakt_limit=_int("TRAKT_LIMIT", 40),
             min_year=_int("MIN_YEAR", 0),
             max_items_per_run=_int("MAX_ITEMS_PER_RUN", 20),
             radarr_url=_str("RADARR_URL"),
@@ -125,9 +147,11 @@ class Config:
             sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", True),
             dry_run=_bool("DRY_RUN", False),
             run_once=_bool("RUN_ONCE", False),
-            run_interval_days=_float("RUN_INTERVAL_DAYS", 1.0),
             retry_not_found_days=_int("RETRY_NOT_FOUND_DAYS", 7),
+            web_port=_int("WEB_PORT", 8383),
             state_file=_str("STATE_FILE", os.path.join(config_dir, "state.json")),
+            settings_file=_str("SETTINGS_FILE", os.path.join(config_dir, "settings.json")),
+            status_file=_str("STATUS_FILE", os.path.join(config_dir, "status.json")),
             log_level=_str("LOG_LEVEL", "INFO").upper(),
         )
         cfg.validate()
@@ -147,18 +171,10 @@ class Config:
                 "Nothing to do: configure at least one of Radarr "
                 "(RADARR_URL + RADARR_API_KEY) or Sonarr (SONARR_URL + SONARR_API_KEY)."
             )
-        if "tmdb" in self.sources and not self.tmdb_api_key:
-            raise SystemExit("SOURCES includes 'tmdb' but TMDB_API_KEY is not set.")
-        unknown = [s for s in self.sources if s not in ("rottentomatoes", "tmdb")]
-        if unknown:
-            raise SystemExit(f"Unknown SOURCES entries: {', '.join(unknown)} "
-                             "(valid: rottentomatoes, tmdb)")
-        if not self.sources:
-            raise SystemExit("SOURCES is empty; set at least one of: rottentomatoes, tmdb")
-        if self.run_interval_days < 1.0:
-            log.warning(
-                "RUN_INTERVAL_DAYS=%s is below the daily minimum; using 1 day. "
-                "Discovery lists change slowly and the sites don't need more traffic.",
-                self.run_interval_days,
-            )
-            self.run_interval_days = 1.0
+        for legacy in ("SOURCES", "RUN_INTERVAL_DAYS", "RUN_INTERVAL_HOURS"):
+            if os.environ.get(legacy):
+                log.warning(
+                    "%s is no longer read from the environment - the run schedule "
+                    "and source selection are managed in the Fresharr web "
+                    "interface (port %d)", legacy, self.web_port,
+                )

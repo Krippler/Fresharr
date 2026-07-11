@@ -14,7 +14,7 @@ class FakeSource:
 
 
 def make_config(**overrides) -> Config:
-    cfg = Config(sources=[], radarr_url="http://x", radarr_api_key="k",
+    cfg = Config(radarr_url="http://x", radarr_api_key="k",
                  sonarr_url="http://y", sonarr_api_key="k")
     for key, value in overrides.items():
         setattr(cfg, key, value)
@@ -23,8 +23,8 @@ def make_config(**overrides) -> Config:
 
 def run_collect(monkeypatch, config, items):
     monkeypatch.setattr("fresharr.runner.build_sources",
-                        lambda cfg: [FakeSource(items)])
-    return collect_items(config)
+                        lambda cfg, settings: [FakeSource(items)])
+    return collect_items(config, settings=None)
 
 
 def test_dedupes_same_title_across_sources(monkeypatch):

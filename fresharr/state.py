@@ -62,5 +62,8 @@ class State:
             return age < self.retry_not_found_seconds
         return False  # FAILED and anything unknown: retry
 
+    def entries(self) -> dict[str, dict]:
+        return dict(self._items)
+
     def __len__(self) -> int:
         return len(self._items)

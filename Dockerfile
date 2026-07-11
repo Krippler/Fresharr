@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir .
 # stay manageable from the array.
 RUN mkdir -p /config && chown 99:100 /config
 VOLUME /config
+EXPOSE 8383
 USER 99:100
 
 ENTRYPOINT ["fresharr"]
