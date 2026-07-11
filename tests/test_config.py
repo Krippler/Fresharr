@@ -7,7 +7,7 @@ def _clear_env(monkeypatch):
     import os
     for key in list(os.environ):
         if key.split("_")[0] in ("RT", "TMDB", "RADARR", "SONARR") or key in (
-            "SOURCES", "DRY_RUN", "RUN_ONCE", "RUN_INTERVAL_HOURS", "MIN_YEAR",
+            "SOURCES", "DRY_RUN", "RUN_ONCE", "RUN_INTERVAL_DAYS", "MIN_YEAR",
             "MAX_ITEMS_PER_RUN", "STATE_FILE", "CONFIG_DIR", "LOG_LEVEL",
             "RETRY_NOT_FOUND_DAYS",
         ):
@@ -50,6 +50,19 @@ def test_unknown_source_rejected(monkeypatch):
     monkeypatch.setenv("SOURCES", "imdb")
     with pytest.raises(SystemExit):
         Config.from_env()
+
+
+def test_run_interval_clamped_to_daily_minimum(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("RADARR_URL", "http://radarr:7878")
+    monkeypatch.setenv("RADARR_API_KEY", "secret")
+    assert Config.from_env().run_interval_days == 1.0  # default is daily
+
+    monkeypatch.setenv("RUN_INTERVAL_DAYS", "0.5")
+    assert Config.from_env().run_interval_days == 1.0  # sub-daily clamped up
+
+    monkeypatch.setenv("RUN_INTERVAL_DAYS", "7")
+    assert Config.from_env().run_interval_days == 7.0  # longer is fine
 
 
 def test_bool_and_list_parsing(monkeypatch):

@@ -23,7 +23,7 @@ services:
       # SONARR_ROOT_FOLDER: /tv
 
       # Behaviour
-      RUN_INTERVAL_HOURS: "12"
+      RUN_INTERVAL_DAYS: "1"             # 1 = daily (minimum), 7 = weekly, 30 = monthly
       MAX_ITEMS_PER_RUN: "20"
       DRY_RUN: "true"                    # start in dry-run; flip to false once happy
     volumes:

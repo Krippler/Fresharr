@@ -30,9 +30,9 @@ def main() -> int:
             log.exception("Run failed unexpectedly")
         if config.run_once:
             return 0
-        log.info("Sleeping %.1f hours until next run", config.run_interval_hours)
+        log.info("Sleeping %.1f day(s) until next run", config.run_interval_days)
         try:
-            time.sleep(config.run_interval_hours * 3600)
+            time.sleep(config.run_interval_days * 86400)
         except KeyboardInterrupt:
             log.info("Interrupted; shutting down")
             return 0

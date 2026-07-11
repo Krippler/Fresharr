@@ -10,7 +10,8 @@ Community Applications template.
 
 ## How it works
 
-Every `RUN_INTERVAL_HOURS` (default 12) Fresharr:
+On a schedule you control — daily by default, and never more often than daily
+(`RUN_INTERVAL_DAYS`: 1 = daily, 7 = weekly, 30 = monthly) — Fresharr:
 
 1. Fetches candidate titles from the configured **sources**:
    - **rottentomatoes** (default) — scrapes Rotten Tomatoes browse lists and filters
@@ -117,7 +118,7 @@ and copy everything after `/browse/`. Examples: `movies_at_home/critics:certifie
 | Variable | Default | Description |
 |---|---|---|
 | `DRY_RUN` | `false` | Log what would be added without touching Radarr/Sonarr. |
-| `RUN_INTERVAL_HOURS` | `12` | Hours between runs. |
+| `RUN_INTERVAL_DAYS` | `1` | Days between runs. `1` = daily (the minimum — lower values are clamped to 1), `2`/`3` = every few days, `7` = weekly, `15` = twice a month, `30` = monthly. |
 | `RUN_ONCE` | `false` | Run a single discovery pass and exit (useful with external schedulers). |
 | `MAX_ITEMS_PER_RUN` | `20` | Safety cap on additions per run. |
 | `RETRY_NOT_FOUND_DAYS` | `7` | Re-try titles that had no Radarr/Sonarr match after this many days. |

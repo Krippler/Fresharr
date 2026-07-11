@@ -83,7 +83,7 @@ class Config:
     # Runtime behaviour
     dry_run: bool = False
     run_once: bool = False
-    run_interval_hours: float = 12.0
+    run_interval_days: float = 1.0  # never runs more often than daily
     retry_not_found_days: int = 7
     state_file: str = ""
     log_level: str = "INFO"
@@ -125,7 +125,7 @@ class Config:
             sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", True),
             dry_run=_bool("DRY_RUN", False),
             run_once=_bool("RUN_ONCE", False),
-            run_interval_hours=_float("RUN_INTERVAL_HOURS", 12.0),
+            run_interval_days=_float("RUN_INTERVAL_DAYS", 1.0),
             retry_not_found_days=_int("RETRY_NOT_FOUND_DAYS", 7),
             state_file=_str("STATE_FILE", os.path.join(config_dir, "state.json")),
             log_level=_str("LOG_LEVEL", "INFO").upper(),
@@ -155,3 +155,10 @@ class Config:
                              "(valid: rottentomatoes, tmdb)")
         if not self.sources:
             raise SystemExit("SOURCES is empty; set at least one of: rottentomatoes, tmdb")
+        if self.run_interval_days < 1.0:
+            log.warning(
+                "RUN_INTERVAL_DAYS=%s is below the daily minimum; using 1 day. "
+                "Discovery lists change slowly and the sites don't need more traffic.",
+                self.run_interval_days,
+            )
+            self.run_interval_days = 1.0
