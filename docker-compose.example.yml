@@ -1,0 +1,30 @@
+services:
+  fresharr:
+    image: ghcr.io/krippler/fresharr:latest
+    container_name: fresharr
+    restart: unless-stopped
+    environment:
+      # Discovery
+      SOURCES: rottentomatoes            # comma-separated: rottentomatoes, tmdb
+      RT_MIN_CRITICS_SCORE: "80"
+      RT_MIN_AUDIENCE_SCORE: "0"
+      # TMDB_API_KEY: your-tmdb-api-key  # required if SOURCES includes tmdb
+
+      # Radarr (movies)
+      RADARR_URL: http://radarr:7878
+      RADARR_API_KEY: your-radarr-api-key
+      # RADARR_QUALITY_PROFILE: HD-1080p # name or id; defaults to first profile
+      # RADARR_ROOT_FOLDER: /movies      # defaults to first root folder
+
+      # Sonarr (TV) - remove this block to only handle movies
+      SONARR_URL: http://sonarr:8989
+      SONARR_API_KEY: your-sonarr-api-key
+      # SONARR_QUALITY_PROFILE: HD-1080p
+      # SONARR_ROOT_FOLDER: /tv
+
+      # Behaviour
+      RUN_INTERVAL_HOURS: "12"
+      MAX_ITEMS_PER_RUN: "20"
+      DRY_RUN: "true"                    # start in dry-run; flip to false once happy
+    volumes:
+      - ./config:/config

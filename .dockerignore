@@ -1,0 +1,9 @@
+.git/
+.github/
+tests/
+unraid/
+docker-compose.example.yml
+__pycache__/
+*.egg-info/
+.pytest_cache/
+config/

@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Fresharr</Name>
+  <Repository>ghcr.io/krippler/fresharr:latest</Repository>
+  <Registry>https://ghcr.io/krippler/fresharr</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/krippler/fresharr/issues</Support>
+  <Project>https://github.com/krippler/fresharr</Project>
+  <Overview>Fresharr discovers new and highly rated movies and TV shows from Rotten Tomatoes (and optionally TMDB) and automatically adds them to Radarr and Sonarr. Set minimum score thresholds, run it on a schedule, and let your library grow with well-reviewed releases. Start with DRY_RUN=true to preview what it would add before letting it loose.</Overview>
+  <Category>MediaApp:Video Tools: Downloaders:</Category>
+  <Icon>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/icon.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/fresharr.xml</TemplateURL>
+  <ExtraParams/>
+  <PostArgs/>
+  <DonateText/>
+  <DonateLink/>
+  <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/fresharr" Mode="rw" Description="Stores Fresharr's state file (which titles were already added)." Type="Path" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Radarr URL" Target="RADARR_URL" Default="http://192.168.1.100:7878" Mode="" Description="Base URL of your Radarr instance. Leave empty to disable movie handling." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Radarr API Key" Target="RADARR_API_KEY" Default="" Mode="" Description="Radarr &gt; Settings &gt; General &gt; API Key" Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Sonarr URL" Target="SONARR_URL" Default="http://192.168.1.100:8989" Mode="" Description="Base URL of your Sonarr instance. Leave empty to disable TV handling." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Sonarr API Key" Target="SONARR_API_KEY" Default="" Mode="" Description="Sonarr &gt; Settings &gt; General &gt; API Key" Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Sources" Target="SOURCES" Default="rottentomatoes" Mode="" Description="Comma-separated discovery sources: rottentomatoes, tmdb (tmdb requires an API key)." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Minimum Critics Score" Target="RT_MIN_CRITICS_SCORE" Default="80" Mode="" Description="Only take Rotten Tomatoes titles with at least this Tomatometer score (0-100)." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Minimum Audience Score" Target="RT_MIN_AUDIENCE_SCORE" Default="0" Mode="" Description="Only take Rotten Tomatoes titles with at least this audience score (0-100, 0 = ignore)." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="true = only log what would be added, don't touch Radarr/Sonarr. Set to false once you're happy with the results." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Run Interval (hours)" Target="RUN_INTERVAL_HOURS" Default="12" Mode="" Description="How often to check for new titles." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Max Items Per Run" Target="MAX_ITEMS_PER_RUN" Default="20" Mode="" Description="Safety cap on how many titles are added in a single run." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="TMDB API Key" Target="TMDB_API_KEY" Default="" Mode="" Description="Free API key from themoviedb.org - only needed if Sources includes tmdb." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="TMDB Minimum Rating" Target="TMDB_MIN_RATING" Default="7.5" Mode="" Description="Minimum TMDB rating 0-10 (tmdb source only)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Radarr Quality Profile" Target="RADARR_QUALITY_PROFILE" Default="" Mode="" Description="Quality profile name or id. Empty = Radarr's first profile." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Radarr Root Folder" Target="RADARR_ROOT_FOLDER" Default="" Mode="" Description="Root folder path as configured in Radarr. Empty = first root folder." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Sonarr Quality Profile" Target="SONARR_QUALITY_PROFILE" Default="" Mode="" Description="Quality profile name or id. Empty = Sonarr's first profile." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Sonarr Root Folder" Target="SONARR_ROOT_FOLDER" Default="" Mode="" Description="Root folder path as configured in Sonarr. Empty = first root folder." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Minimum Year" Target="MIN_YEAR" Default="" Mode="" Description="Ignore titles released before this year (empty = no limit)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="RT Movie Lists" Target="RT_MOVIE_LISTS" Default="movies_in_theaters/critics:certified_fresh,movies_at_home/critics:certified_fresh" Mode="" Description="Comma-separated Rotten Tomatoes browse list paths for movies (the part of the URL after /browse/)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="RT TV Lists" Target="RT_TV_LISTS" Default="tv_series_browse/critics:fresh" Mode="" Description="Comma-separated Rotten Tomatoes browse list paths for TV." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="DEBUG, INFO, WARNING or ERROR." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>
