@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fresharr"
-version = "0.1.0"
+version = "0.0.1"
 description = "Discovers new and highly rated movies & TV shows (Rotten Tomatoes, TMDB) and adds them to Radarr/Sonarr"
 readme = "README.md"
 license = { file = "LICENSE" }
