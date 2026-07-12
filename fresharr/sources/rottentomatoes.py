@@ -40,8 +40,21 @@ USER_AGENT = (
 
 # Each tile links to a title page; chunk the HTML on these anchors.
 _TILE_RE = re.compile(r'<a\b[^>]*\bhref="(/(?:m|tv)/[^"]+)"[^>]*>', re.IGNORECASE)
-_CRITICS_RE = re.compile(r'criticsscore="(\d{1,3})"', re.IGNORECASE)
-_AUDIENCE_RE = re.compile(r'audiencescore="(\d{1,3})"', re.IGNORECASE)
+# Scores appear under several markups across RT redesigns; each list is
+# tried in order until one matches inside a tile.
+_CRITICS_RES = [
+    re.compile(r'criticsscore="(\d{1,3})"', re.IGNORECASE),
+    re.compile(r'<score-icon-critics[^>]*\bpercentage="(\d{1,3})"', re.IGNORECASE),
+    re.compile(r'slot="criticsScore"[^>]*>\s*(\d{1,3})%', re.IGNORECASE),
+    re.compile(r'data-qa="(?:tomatometer|critics-score)"[^>]*>\s*(\d{1,3})%',
+               re.IGNORECASE),
+]
+_AUDIENCE_RES = [
+    re.compile(r'audiencescore="(\d{1,3})"', re.IGNORECASE),
+    re.compile(r'<score-icon-audience[^>]*\bpercentage="(\d{1,3})"', re.IGNORECASE),
+    re.compile(r'slot="audienceScore"[^>]*>\s*(\d{1,3})%', re.IGNORECASE),
+    re.compile(r'data-qa="(?:audience-score)"[^>]*>\s*(\d{1,3})%', re.IGNORECASE),
+]
 _TITLE_RE = re.compile(
     r'data-qa="discovery-media-list-item-title"[^>]*>\s*([^<]+?)\s*<', re.IGNORECASE)
 _DATE_RE = re.compile(
@@ -109,6 +122,7 @@ def parse_browse_html(html: str, media_type: str, source: str) -> list[MediaItem
     tiles = list(_TILE_RE.finditer(html))
     items: list[MediaItem] = []
     seen = set()
+    first_chunk = None
     for i, tile in enumerate(tiles):
         href = tile.group(1)
         end = tiles[i + 1].start() if i + 1 < len(tiles) else len(html)
@@ -120,6 +134,8 @@ def parse_browse_html(html: str, media_type: str, source: str) -> list[MediaItem
         if not title or href in seen:
             continue
         seen.add(href)
+        if first_chunk is None:
+            first_chunk = chunk
         date_match = _DATE_RE.search(chunk)
         year = None
         if date_match:
@@ -131,24 +147,44 @@ def parse_browse_html(html: str, media_type: str, source: str) -> list[MediaItem
             media_type=media_type,
             source=source,
             year=year,
-            critics_score=_score(_CRITICS_RE.search(chunk)),
-            audience_score=_score(_AUDIENCE_RE.search(chunk)),
+            critics_score=_score(chunk, _CRITICS_RES),
+            audience_score=_score(chunk, _AUDIENCE_RES),
             url=f"https://www.rottentomatoes.com{href}",
         ))
+    # If titles parsed but no scores did, the score markup changed: dump one
+    # tile's structure (score-bearing snippet, not page content) so the next
+    # log pins down the pattern.
+    if items and first_chunk is not None and all(
+            it.critics_score is None for it in items):
+        log.warning("Rotten Tomatoes: %d titles parsed but no scores matched. "
+                    "Sample tile markup: %s", len(items),
+                    _score_sample(first_chunk))
     return items
 
 
-def _score(match) -> int | None:
-    if not match:
-        return None
-    try:
-        return int(match.group(1))
-    except (ValueError, IndexError):
-        return None
+def _score(chunk: str, patterns) -> int | None:
+    for pattern in patterns:
+        match = pattern.search(chunk)
+        if match:
+            try:
+                return int(match.group(1))
+            except (ValueError, IndexError):
+                continue
+    return None
+
+
+def _score_sample(chunk: str) -> str:
+    """Extract the score-bearing portion of a tile for diagnosis, favouring
+    the neighbourhood of 'score' markup and capping length."""
+    lower = chunk.lower()
+    idx = lower.find("score")
+    if idx == -1:
+        return repr(chunk[:400])
+    start = max(0, idx - 100)
+    return repr(chunk[start:start + 400])
 
 
 def _fingerprint(html: str) -> str:
     """Structural summary of an unparseable page for log-based diagnosis."""
     return (f"{len(html)} bytes; tile anchors: {len(_TILE_RE.findall(html))}; "
-            f"title spans: {len(_TITLE_RE.findall(html))}; "
-            f"criticsscore attrs: {len(_CRITICS_RE.findall(html))}")
+            f"title spans: {len(_TITLE_RE.findall(html))}")

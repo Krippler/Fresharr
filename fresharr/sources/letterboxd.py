@@ -28,7 +28,14 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
-_SLUG_RE = re.compile(r'data-film-slug="([^"/]+)"')
+# Poster slugs appear under different attributes across Letterboxd
+# redesigns; each is tried in order.
+_SLUG_RES = [
+    re.compile(r'data-film-slug="([^"/]+)"'),
+    re.compile(r'data-item-slug="([^"/]+)"'),
+    re.compile(r'data-target-link="/film/([^"/]+)/"'),
+    re.compile(r'href="/film/([^"/]+)/"'),
+]
 _LD_JSON_RE = re.compile(
     r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', re.DOTALL)
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
@@ -72,12 +79,15 @@ class LetterboxdSource:
         except requests.RequestException as exc:
             log.warning("Letterboxd list %r failed: %s", self.list_path, exc)
             return []
-        slugs = list(dict.fromkeys(_SLUG_RE.findall(resp.text)))  # ordered dedupe
+        slugs: list[str] = []
+        for pattern in _SLUG_RES:
+            slugs = list(dict.fromkeys(pattern.findall(resp.text)))  # ordered dedupe
+            if slugs:
+                break
         if not slugs:
             log.warning("Letterboxd list %r: no films parsed - the page layout "
-                        "may have changed. %d bytes received, data-film-slug "
-                        "present: %s", self.list_path, len(resp.text),
-                        "data-film-slug" in resp.text)
+                        "may have changed. %s", self.list_path,
+                        _fingerprint(resp.text))
         return slugs
 
     def _fetch_film(self, slug: str) -> MediaItem | None:
@@ -112,6 +122,25 @@ class LetterboxdSource:
             url=FILM_URL.format(slug=slug),
             votes=rating_count if isinstance(rating_count, int) else None,
         )
+
+
+def _fingerprint(html: str) -> str:
+    """Structural summary for log-based diagnosis: which slug markers and
+    poster containers are present, plus a sample of any /film/ link."""
+    markers = {
+        "data-film-slug": html.count("data-film-slug"),
+        "data-item-slug": html.count("data-item-slug"),
+        "data-target-link": html.count("data-target-link"),
+        "/film/ hrefs": html.count('href="/film/'),
+        "react-component": html.count("react-component"),
+        "poster-container": html.count("poster-container"),
+    }
+    sample = ""
+    idx = html.find("/film/")
+    if idx != -1:
+        sample = "; sample: " + repr(html[max(0, idx - 60):idx + 40])
+    present = ", ".join(f"{k}={v}" for k, v in markers.items())
+    return f"{len(html)} bytes; {present}{sample}"
 
 
 def _extract_ld_json(html: str) -> dict | None:

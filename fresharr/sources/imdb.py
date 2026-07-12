@@ -40,9 +40,18 @@ class ImdbSource:
         self.movie_charts = config.imdb_movie_charts
         self.tv_charts = config.imdb_tv_charts
         self.session = requests.Session()
+        # IMDb returns an empty body to requests that don't look like a
+        # browser navigation; a full Accept plus these fetch hints get the
+        # real HTML.
         self.session.headers.update({
             "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                      "image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Upgrade-Insecure-Requests": "1",
         })
 
     def fetch(self) -> list[MediaItem]:

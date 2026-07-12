@@ -1,5 +1,26 @@
 from fresharr.config import Config
-from fresharr.sources.letterboxd import LetterboxdSource, _extract_ld_json
+from fresharr.sources.letterboxd import (
+    LetterboxdSource,
+    _extract_ld_json,
+    _SLUG_RES,
+)
+
+
+def _slugs(html):
+    for pattern in _SLUG_RES:
+        found = list(dict.fromkeys(pattern.findall(html)))
+        if found:
+            return found
+    return []
+
+
+def test_slug_extraction_fallbacks():
+    # Current markup
+    assert _slugs('<div data-film-slug="dune"></div>') == ["dune"]
+    # Redesign variants each recognised
+    assert _slugs('<div data-item-slug="dune"></div>') == ["dune"]
+    assert _slugs('<a data-target-link="/film/dune/"></a>') == ["dune"]
+    assert _slugs('<a href="/film/dune/">Dune</a>') == ["dune"]
 
 LIST_HTML = """
 <ul>

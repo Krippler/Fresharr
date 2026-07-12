@@ -82,6 +82,27 @@ def test_fetch_survives_layout_change(monkeypatch):
     assert source.fetch() == []
 
 
+def test_scores_from_score_icon_markup():
+    # RT redesign variant: percentage attributes on score-icon elements
+    html = ('<a href="/m/dune_part_two">'
+            '<score-icon-critics sentiment="positive" percentage="92"></score-icon-critics>'
+            '<score-icon-audience percentage="95"></score-icon-audience>'
+            '<span data-qa="discovery-media-list-item-title">Dune: Part Two</span></a>')
+    item = parse_browse_html(html, MOVIE, "rottentomatoes")[0]
+    assert item.critics_score == 92
+    assert item.audience_score == 95
+
+
+def test_scores_from_rt_text_slots():
+    html = ('<a href="/m/movie">'
+            '<rt-text slot="criticsScore">88%</rt-text>'
+            '<rt-text slot="audienceScore">91%</rt-text>'
+            '<span data-qa="discovery-media-list-item-title">Movie</span></a>')
+    item = parse_browse_html(html, MOVIE, "rottentomatoes")[0]
+    assert item.critics_score == 88
+    assert item.audience_score == 91
+
+
 def test_tv_list_uses_tv_media_type():
     html = ('<a href="/tv/the_studio">'
             '<score-pairs-deprecated criticsscore="95"></score-pairs-deprecated>'
