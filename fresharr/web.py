@@ -205,14 +205,14 @@ INDEX_HTML = """<!doctype html>
            flex-wrap: wrap; }
   h1 { font-size: 1.5rem; color: #7bd88f; letter-spacing: .02em; }
   .ver { color: #6b7684; font-size: .8rem; }
-  /* Sections flow into 1-4 balanced columns by width; columns widen within
-     each range, and cap at 4 (capped further by .wrap max-width). */
-  .cards { column-count: 1; column-gap: 1.25rem; }
-  @media (min-width: 720px)  { .cards { column-count: 2; } }
-  @media (min-width: 1200px) { .cards { column-count: 3; } }
-  @media (min-width: 1800px) { .cards { column-count: 4; } }
+  /* Masonry via independent flex columns (count chosen in JS by width):
+     each column stacks its own cards, so expanding one card only grows
+     its column - other columns never shift. */
+  .cards { display: flex; align-items: flex-start; gap: 1.25rem; }
+  .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+         gap: 1.25rem; }
   .card { background: #1a2027; border: 1px solid #2a323c; border-radius: 10px;
-          padding: 1rem 1.25rem; margin-bottom: 1rem; break-inside: avoid; }
+          padding: 1rem 1.25rem; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
        color: #8b96a5; margin-bottom: .75rem; }
   .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
@@ -313,7 +313,7 @@ INDEX_HTML = """<!doctype html>
     <span class="dry" id="dryrun" hidden>DRY RUN &mdash; nothing is sent to Radarr/Sonarr</span>
   </header>
 
-  <div class="cards">
+  <div class="cards" id="cards" style="visibility:hidden">
   <div class="card">
     <h2>Status</h2>
     <div class="stat" id="status">Loading&hellip;</div>
@@ -673,6 +673,43 @@ async function refresh() {
   catch (e) { toast("Failed to load: " + e.message, true); }
 }
 
+// Masonry layout: distribute the section cards into N independent columns
+// (N by window width). Re-runs only when the column count changes, so
+// expanding/collapsing a card never reshuffles the others.
+let cardEls = null;
+let lastColCount = 0;
+function columnsForWidth() {
+  const w = window.innerWidth;
+  return w >= 1800 ? 4 : w >= 1200 ? 3 : w >= 720 ? 2 : 1;
+}
+function layoutMasonry(force) {
+  const container = $("cards");
+  if (!container) return;
+  if (!cardEls) cardEls = Array.from(container.querySelectorAll(".card"));
+  const n = columnsForWidth();
+  if (!force && n === lastColCount) return;
+  lastColCount = n;
+  const cols = [];
+  const heights = [];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement("div"); c.className = "col";
+    cols.push(c); heights.push(0);
+  }
+  // Place each card (in source order) into the currently shortest column.
+  cardEls.forEach(card => {
+    let mi = 0;
+    for (let i = 1; i < n; i++) if (heights[i] < heights[mi]) mi = i;
+    cols[mi].appendChild(card);
+    heights[mi] += card.offsetHeight + 20;
+  });
+  container.replaceChildren(...cols);
+}
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => layoutMasonry(false), 150);
+});
+
 $("interval").addEventListener("change", async ev => {
   try {
     await api("/api/settings", {method: "POST",
@@ -691,7 +728,11 @@ $("runnow").addEventListener("click", async () => {
   setTimeout(() => { btn.disabled = false; refresh(); }, 1500);
 });
 
-refresh().then(() => { loadArrChoices("radarr"); loadArrChoices("sonarr"); });
+refresh().then(() => {
+  layoutMasonry(true);
+  $("cards").style.visibility = "";
+  loadArrChoices("radarr"); loadArrChoices("sonarr");
+});
 setInterval(refresh, 15000);
 </script>
 </body>
