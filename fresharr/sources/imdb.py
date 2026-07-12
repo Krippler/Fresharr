@@ -160,6 +160,11 @@ def _fingerprint(html: str) -> str:
         except json.JSONDecodeError:
             pass
     parts.append(f"ld+json types: {ld_types or 'none'}")
+    # A short body is almost always a block/consent interstitial rather than
+    # the chart; include a snippet (markup, not user data) to confirm.
+    if len(html) < 20000:
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
+        parts.append(f"body text: {text[:200]!r}")
     return "; ".join(parts)
 
 

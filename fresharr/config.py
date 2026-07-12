@@ -128,9 +128,14 @@ class Config:
         config_dir = _str("CONFIG_DIR", "/config")
         cfg = cls(
             rt_movie_lists=_list(
+                # Theatrical certified-fresh only by default: its dates are
+                # real release dates. The movies_at_home list is a streaming
+                # *catalog* (all-time classics newly on streaming, dated by
+                # streaming availability), which floods results with old films
+                # mislabelled with the current year - opt in explicitly if
+                # wanted.
                 "RT_MOVIE_LISTS",
-                "movies_in_theaters/critics:certified_fresh,"
-                "movies_at_home/critics:certified_fresh",
+                "movies_in_theaters/critics:certified_fresh",
             ),
             rt_tv_lists=_list("RT_TV_LISTS", "tv_series_browse/critics:fresh"),
             rt_min_critics_score=_int("RT_MIN_CRITICS_SCORE", 80),
