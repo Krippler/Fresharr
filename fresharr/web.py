@@ -114,17 +114,19 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
         else:
             return jsonify({"error": f"Unknown app: {app_name}"}), 404
         if not configured:
-            return jsonify({"configured": False, "profiles": [],
-                            "root_folders": []})
+            return jsonify({"configured": False, "connected": False,
+                            "profiles": [], "root_folders": []})
         client = factory(effective)
         try:
             profiles = client._get("qualityprofile")
             folders = client._get("rootfolder")
         except requests.RequestException as exc:
-            return jsonify({"configured": True, "error": str(exc),
+            return jsonify({"configured": True, "connected": False,
+                            "error": _short_error(exc),
                             "profiles": [], "root_folders": []})
         return jsonify({
             "configured": True,
+            "connected": True,
             "profiles": [{"id": p.get("id"), "name": p.get("name", "?")}
                          for p in profiles],
             "root_folders": [f.get("path", "") for f in folders],
@@ -138,6 +140,20 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
         return jsonify({"requested": True})
 
     return app
+
+
+def _short_error(exc: Exception) -> str:
+    """A concise reason for a failed Radarr/Sonarr connection."""
+    text = str(exc)
+    if "Connection refused" in text or "Failed to establish" in text:
+        return "connection refused (check URL/port)"
+    if "Name or service not known" in text or "getaddrinfo" in text:
+        return "host not found (check URL)"
+    if "timed out" in text.lower():
+        return "timed out"
+    if "401" in text:
+        return "unauthorized (check API key)"
+    return text.split(":")[-1].strip()[:80] or "unreachable"
 
 
 def _option_payloads(effective_config: Config, group: str) -> list[dict]:
@@ -184,12 +200,15 @@ INDEX_HTML = """<!doctype html>
   * { box-sizing: border-box; margin: 0; }
   body { font: 15px/1.5 system-ui, -apple-system, sans-serif;
          background: #101418; color: #dde3ea; padding: 1.5rem; }
-  .wrap { max-width: 780px; margin: 0 auto; display: grid; gap: 1rem; }
-  header { display: flex; align-items: baseline; gap: .75rem; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem;
+           flex-wrap: wrap; }
   h1 { font-size: 1.5rem; color: #7bd88f; letter-spacing: .02em; }
   .ver { color: #6b7684; font-size: .8rem; }
+  /* Sections flow into 1/2/3 balanced columns as the window widens. */
+  .cards { column-width: 360px; column-gap: 1rem; }
   .card { background: #1a2027; border: 1px solid #2a323c; border-radius: 10px;
-          padding: 1rem 1.25rem; }
+          padding: 1rem 1.25rem; margin-bottom: 1rem; break-inside: avoid; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
        color: #8b96a5; margin-bottom: .75rem; }
   .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
@@ -238,11 +257,19 @@ INDEX_HTML = """<!doctype html>
   .opt { display: flex; flex-direction: column; gap: .2rem; }
   .opt > span { font-size: .75rem; color: #8b96a5; }
   .opt small { color: #6b7684; font-size: .72rem; }
-  .conns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  .conns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
            gap: 1.2rem; }
   .conn h3 { font-size: .95rem; margin-bottom: .4rem; }
-  .conn .state { font-size: .75rem; margin-left: .4rem; }
-  .state.ok { color: #7bd88f; } .state.off { color: #6b7684; }
+  .conn .state { font-size: .75rem; margin-left: .4rem; white-space: nowrap; }
+  .state.ok { color: #7bd88f; }
+  .state.off { color: #6b7684; }
+  .state.connecting { color: #d8b44a; }
+  .state.err { color: #e07a7a; }
+  .state .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                margin-right: .3rem; background: currentColor; vertical-align: middle; }
+  .state.connecting .dot { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  input:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
   .srcopts { margin-top: .4rem; }
   .srcopts .optgrid { margin-top: .2rem; }
   .langgroup { margin-top: .6rem; }
@@ -272,6 +299,7 @@ INDEX_HTML = """<!doctype html>
     <span class="dry" id="dryrun" hidden>DRY RUN &mdash; nothing is sent to Radarr/Sonarr</span>
   </header>
 
+  <div class="cards">
   <div class="card">
     <h2>Status</h2>
     <div class="stat" id="status">Loading&hellip;</div>
@@ -345,6 +373,7 @@ INDEX_HTML = """<!doctype html>
   <div class="card">
     <h2>Recently added</h2>
     <ul class="recent" id="recent"><li class="muted">Nothing yet.</li></ul>
+  </div>
   </div>
 </div>
 <div id="toast"></div>
@@ -432,8 +461,8 @@ function render(o) {
   $("conn-radarr").innerHTML = o.connections.radarr.map(optionInput).join("");
   $("conn-sonarr").innerHTML = o.connections.sonarr.map(optionInput).join("");
   $("general").innerHTML = o.general_options.map(optionInput).join("");
-  setState("radarr-state", o.arr.radarr);
-  setState("sonarr-state", o.arr.sonarr);
+  renderConnState("radarr", o.arr.radarr);
+  renderConnState("sonarr", o.arr.sonarr);
   wireOptionInputs();
 
   document.querySelectorAll("[data-source]").forEach(box => {
@@ -467,15 +496,16 @@ const arrChoices = {radarr: null, sonarr: null};
 let lastOverview = null;
 
 function optionInput(opt) {
-  // Quality profile / root folder become dropdowns fed by the connected
-  // app's API once the connection works.
+  // Quality profile / root folder are dropdowns fed by the connected app's
+  // API. Until that app is actually connected they stay disabled - no free
+  // typing before the real options load.
   if (opt.select) {
     const app = opt.key.startsWith("sonarr") ? "sonarr" : "radarr";
     const choices = arrChoices[app];
-    if (choices && choices.configured && !choices.error) {
+    const current = String(opt.value ?? "");
+    if (choices && choices.connected) {
       const values = opt.select === "profiles"
         ? choices.profiles.map(p => p.name) : choices.root_folders;
-      const current = String(opt.value ?? "");
       const opts = [`<option value="">(auto: first)</option>`]
         .concat(values.map(v =>
           `<option value="${escapeHtml(v)}" ${v === current ? "selected" : ""}>${escapeHtml(v)}</option>`));
@@ -486,6 +516,14 @@ function optionInput(opt) {
         ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
       </label>`;
     }
+    // Not connected yet: show current value read-only with a hint.
+    const hint = (choices === null || choices === undefined)
+      ? "connecting to " + app + "…"
+      : "connect " + app + " to choose";
+    return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
+      <input type="text" value="${escapeHtml(current)}" disabled placeholder="${hint}">
+      <small>${hint}</small>
+    </label>`;
   }
   const type = opt.type === "secret" ? "password"
              : (opt.type === "str" ? "text" : "number");
@@ -493,19 +531,21 @@ function optionInput(opt) {
     `step="${opt.type === "float" ? "0.1" : "1"}"` +
     (opt.min != null ? ` min="${opt.min}"` : "") +
     (opt.max != null ? ` max="${opt.max}"` : "");
-  const app = opt.select ? (opt.key.startsWith("sonarr") ? "sonarr" : "radarr") : null;
-  const loadNote = opt.select && arrChoices[app] && arrChoices[app].error
-    ? `<small class="err">couldn't load choices from ${app} - check URL/API key</small>` : "";
   return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
     <input type="${type}" data-opt="${opt.key}" ${numberAttrs}
            value="${escapeHtml(opt.value ?? "")}" autocomplete="off">
-    ${loadNote || (opt.description ? `<small>${escapeHtml(opt.description)}</small>` : "")}
+    ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
   </label>`;
 }
 
 async function loadArrChoices(app) {
+  arrChoices[app] = null;  // mark as connecting so the UI shows the spinner
+  if (lastOverview) render(lastOverview);
   try { arrChoices[app] = await api("/api/arr/" + app + "/choices"); }
-  catch (e) { arrChoices[app] = null; }
+  catch (e) {
+    arrChoices[app] = {configured: true, connected: false, error: "unreachable",
+                       profiles: [], root_folders: []};
+  }
   const active = document.activeElement;
   if (lastOverview && !(active && active.dataset && active.dataset.opt))
     render(lastOverview);
@@ -527,10 +567,25 @@ function wireOptionInputs() {
   });
 }
 
-function setState(elementId, configured) {
-  const el = $(elementId);
-  el.textContent = configured ? "configured" : "not configured";
-  el.className = "state " + (configured ? "ok" : "off");
+function renderConnState(app, configured) {
+  const el = $(app + "-state");
+  if (!configured) {
+    el.innerHTML = '<span class="dot"></span>not configured';
+    el.className = "state off";
+    return;
+  }
+  const ch = arrChoices[app];
+  if (ch === null || ch === undefined) {
+    el.innerHTML = '<span class="dot"></span>connecting…';
+    el.className = "state connecting";
+  } else if (ch.connected) {
+    el.innerHTML = '<span class="dot"></span>connected';
+    el.className = "state ok";
+  } else {
+    el.innerHTML = '<span class="dot"></span>connect failed'
+      + (ch.error ? " — " + escapeHtml(ch.error) : "");
+    el.className = "state err";
+  }
 }
 
 function renderLanguages(elementId, settingKey, o) {

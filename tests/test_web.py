@@ -145,10 +145,11 @@ def test_options_editable_via_api(env):
 def test_arr_choices_endpoint(env, monkeypatch):
     client, _, _ = env
 
-    # Unknown app 404s; unconfigured app reports configured: false
+    # Unknown app 404s; unconfigured app reports configured/connected false
     assert client.get("/api/arr/plex/choices").status_code == 404
     data = client.get("/api/arr/sonarr/choices").get_json()
-    assert data == {"configured": False, "profiles": [], "root_folders": []}
+    assert data == {"configured": False, "connected": False,
+                    "profiles": [], "root_folders": []}
 
     # Configured app returns live profiles and root folders
     class FakeRadarr:
@@ -165,10 +166,11 @@ def test_arr_choices_endpoint(env, monkeypatch):
     monkeypatch.setattr("fresharr.web.Radarr", FakeRadarr)
     data = client.get("/api/arr/radarr/choices").get_json()
     assert data["configured"] is True
+    assert data["connected"] is True
     assert [p["name"] for p in data["profiles"]] == ["HD-1080p", "4K"]
     assert data["root_folders"] == ["/movies", "/movies4k"]
 
-    # Unreachable app degrades to an error message, not a 500
+    # Unreachable app degrades to connected:false with a concise reason
     import requests
 
     class BrokenRadarr:
@@ -176,12 +178,13 @@ def test_arr_choices_endpoint(env, monkeypatch):
             pass
 
         def _get(self, path, **params):
-            raise requests.ConnectionError("connection refused")
+            raise requests.ConnectionError("Connection refused")
 
     monkeypatch.setattr("fresharr.web.Radarr", BrokenRadarr)
     data = client.get("/api/arr/radarr/choices").get_json()
     assert data["configured"] is True
-    assert "connection refused" in data["error"]
+    assert data["connected"] is False
+    assert "check URL/port" in data["error"]
     assert data["profiles"] == []
 
 

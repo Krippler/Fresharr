@@ -63,9 +63,6 @@ OPTION_DEFS: list[OptionDef] = [
     OptionDef("rt_movie_lists", "Movie lists", "rottentomatoes", "str",
               "Comma-separated browse paths (after rottentomatoes.com/browse/)",
               is_list=True),
-    OptionDef("rt_tv_lists", "TV lists", "rottentomatoes", "str",
-              "Comma-separated browse paths. Empty by default - RT's fresh-TV "
-              "browse is an evergreen catalog, not new shows.", is_list=True),
     OptionDef("metacritic_min_score", "Min Metascore", "metacritic", "int",
               "0-100. Review counts aren't available from the charts.",
               min=0, max=100),
