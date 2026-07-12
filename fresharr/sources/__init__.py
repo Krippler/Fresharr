@@ -69,8 +69,9 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="rottentomatoes",
         label="Rotten Tomatoes",
-        description="Browse lists (Certified Fresh in theaters / at home, Fresh TV) "
-                    "filtered by Tomatometer and audience score.",
+        description="Certified-fresh theatrical movies filtered by Tomatometer "
+                    "and audience score. (TV off by default - RT's fresh-TV "
+                    "browse is an evergreen catalog; Metacritic covers new TV.)",
         category=MOVIES_TV,
         default_enabled=True,
         requires="",

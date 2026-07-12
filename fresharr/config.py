@@ -131,7 +131,11 @@ class Config:
                 "RT_MOVIE_LISTS",
                 "movies_in_theaters/critics:certified_fresh",
             ),
-            rt_tv_lists=_list("RT_TV_LISTS", "tv_series_browse/critics:fresh"),
+            # No TV list by default: RT's "fresh TV" browse is an evergreen
+            # catalog (long-running shows, no release year), not a new-shows
+            # feed, so it surfaced old series. Opt in with a browse path if
+            # wanted; Metacritic covers new TV reliably.
+            rt_tv_lists=_list("RT_TV_LISTS", ""),
             rt_min_critics_score=_int("RT_MIN_CRITICS_SCORE", 80),
             rt_min_audience_score=_int("RT_MIN_AUDIENCE_SCORE", 0),
             rt_max_pages=_int("RT_MAX_PAGES", 2),
