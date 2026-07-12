@@ -29,8 +29,8 @@ class ArrClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}/api/v3/{path.lstrip('/')}"
 
-    def _get(self, path: str, **params):
-        resp = self.session.get(self._url(path), params=params, timeout=60)
+    def _get(self, path: str, *, timeout: int = 60, **params):
+        resp = self.session.get(self._url(path), params=params, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
 

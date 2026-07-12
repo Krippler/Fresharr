@@ -118,8 +118,8 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
                             "profiles": [], "root_folders": []})
         client = factory(effective)
         try:
-            profiles = client._get("qualityprofile")
-            folders = client._get("rootfolder")
+            profiles = client._get("qualityprofile", timeout=8)
+            folders = client._get("rootfolder", timeout=8)
         except requests.RequestException as exc:
             return jsonify({"configured": True, "connected": False,
                             "error": _short_error(exc),
@@ -271,7 +271,10 @@ INDEX_HTML = """<!doctype html>
   .conns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
            gap: 1.2rem; }
   .conn h3 { font-size: .95rem; margin-bottom: .4rem; }
-  .conn .state { font-size: .75rem; margin-left: .4rem; white-space: nowrap; }
+  /* Show the state on its own line so a long failure reason wraps inside
+     the column instead of overflowing into the next one. */
+  .conn .state { display: block; font-size: .75rem; margin: .15rem 0 0;
+                 overflow-wrap: anywhere; }
   .state.ok { color: #7bd88f; }
   .state.off { color: #6b7684; }
   .state.connecting { color: #d8b44a; }
@@ -564,17 +567,28 @@ function optionInput(opt) {
   </label>`;
 }
 
-async function loadArrChoices(app) {
-  arrChoices[app] = null;  // mark as connecting so the UI shows the spinner
-  if (lastOverview) render(lastOverview);
-  try { arrChoices[app] = await api("/api/arr/" + app + "/choices"); }
+const arrRetryTimers = {radarr: null, sonarr: null};
+
+async function loadArrChoices(app, isRetry) {
+  if (arrRetryTimers[app]) { clearTimeout(arrRetryTimers[app]); arrRetryTimers[app] = null; }
+  // Show "connecting…" on the first attempt; on background retries keep the
+  // last state visible (no flicker) until it actually connects.
+  if (!isRetry) { arrChoices[app] = null; if (lastOverview) render(lastOverview); }
+  let result;
+  try { result = await api("/api/arr/" + app + "/choices"); }
   catch (e) {
-    arrChoices[app] = {configured: true, connected: false, error: "unreachable",
-                       profiles: [], root_folders: []};
+    result = {configured: true, connected: false, error: "unreachable",
+              profiles: [], root_folders: []};
   }
+  arrChoices[app] = result;
   const active = document.activeElement;
   if (lastOverview && !(active && active.dataset && active.dataset.opt))
     render(lastOverview);
+  // Configured but not up yet (app still starting, wrong port, etc.): keep
+  // polling so it flips to "connected" on its own once it answers.
+  if (result.configured && !result.connected) {
+    arrRetryTimers[app] = setTimeout(() => loadArrChoices(app, true), 5000);
+  }
 }
 
 function wireOptionInputs() {
