@@ -118,8 +118,8 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
                             "profiles": [], "root_folders": []})
         client = factory(effective)
         try:
-            profiles = client._get("qualityprofile", timeout=8)
-            folders = client._get("rootfolder", timeout=8)
+            profiles = client._get("qualityprofile", timeout=15)
+            folders = client._get("rootfolder", timeout=15)
         except requests.RequestException as exc:
             return jsonify({"configured": True, "connected": False,
                             "error": _short_error(exc),
@@ -546,7 +546,7 @@ function optionInput(opt) {
       </label>`;
     }
     // Not connected yet: show current value read-only with a hint.
-    const hint = (choices === null || choices === undefined)
+    const hint = arrConnecting(app)
       ? "connecting to " + app + "…"
       : "connect " + app + " to choose";
     return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
@@ -568,12 +568,27 @@ function optionInput(opt) {
 }
 
 const arrRetryTimers = {radarr: null, sonarr: null};
+const arrFirstAttempt = {radarr: 0, sonarr: 0};
+// Keep showing "connecting…" (not "failed") for this long while an app that
+// is configured hasn't answered yet - covers a slow or still-starting
+// Radarr/Sonarr so a transient timeout doesn't flash as a failure.
+const ARR_GRACE_MS = 25000;
+
+// true while we should still say "connecting…" rather than "connect failed".
+function arrConnecting(app) {
+  const ch = arrChoices[app];
+  if (ch === null || ch === undefined) return true;      // first attempt in flight
+  if (ch.connected || !ch.configured) return false;      // up, or nothing to wait for
+  return (Date.now() - (arrFirstAttempt[app] || 0)) < ARR_GRACE_MS;
+}
 
 async function loadArrChoices(app, isRetry) {
   if (arrRetryTimers[app]) { clearTimeout(arrRetryTimers[app]); arrRetryTimers[app] = null; }
-  // Show "connecting…" on the first attempt; on background retries keep the
-  // last state visible (no flicker) until it actually connects.
-  if (!isRetry) { arrChoices[app] = null; if (lastOverview) render(lastOverview); }
+  if (!isRetry) {
+    arrFirstAttempt[app] = Date.now();
+    arrChoices[app] = null;                 // show "connecting…" on the first attempt
+    if (lastOverview) render(lastOverview);
+  }
   let result;
   try { result = await api("/api/arr/" + app + "/choices"); }
   catch (e) {
@@ -584,10 +599,10 @@ async function loadArrChoices(app, isRetry) {
   const active = document.activeElement;
   if (lastOverview && !(active && active.dataset && active.dataset.opt))
     render(lastOverview);
-  // Configured but not up yet (app still starting, wrong port, etc.): keep
-  // polling so it flips to "connected" on its own once it answers.
+  // Configured but not up yet (still starting, slow, wrong port): keep polling
+  // so it flips to "connected" on its own once it answers - no page reload.
   if (result.configured && !result.connected) {
-    arrRetryTimers[app] = setTimeout(() => loadArrChoices(app, true), 5000);
+    arrRetryTimers[app] = setTimeout(() => loadArrChoices(app, true), 4000);
   }
 }
 
@@ -615,15 +630,15 @@ function renderConnState(app, configured) {
     return;
   }
   const ch = arrChoices[app];
-  if (ch === null || ch === undefined) {
-    el.innerHTML = '<span class="dot"></span>connecting…';
-    el.className = "state connecting";
-  } else if (ch.connected) {
+  if (ch && ch.connected) {
     el.innerHTML = '<span class="dot"></span>connected';
     el.className = "state ok";
+  } else if (arrConnecting(app)) {
+    el.innerHTML = '<span class="dot"></span>connecting…';
+    el.className = "state connecting";
   } else {
     el.innerHTML = '<span class="dot"></span>connect failed'
-      + (ch.error ? " — " + escapeHtml(ch.error) : "");
+      + (ch && ch.error ? " — " + escapeHtml(ch.error) : "");
     el.className = "state err";
   }
 }
