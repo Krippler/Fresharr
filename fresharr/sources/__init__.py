@@ -41,10 +41,6 @@ def _tmdb_factory(config):
     from .tmdb import TmdbSource
     return TmdbSource(config)
 
-def _imdb_factory(config):
-    from .imdb import ImdbSource
-    return ImdbSource(config)
-
 def _trakt_factory(config):
     from .trakt import TraktSource
     return TraktSource(config)
@@ -82,17 +78,6 @@ SOURCE_DEFS: list[SourceDef] = [
         detail=lambda c: f"critics ≥ {c.rt_min_critics_score}%"
                          + (f", audience ≥ {c.rt_min_audience_score}%"
                             if c.rt_min_audience_score else ""),
-    ),
-    SourceDef(
-        name="imdb",
-        label="IMDb",
-        description="Most Popular Movies and TV charts, filtered by IMDb rating. "
-                    "No API key needed.",
-        category=MOVIES_TV,
-        default_enabled=False,
-        requires="",
-        factory=_imdb_factory,
-        detail=lambda c: f"rating ≥ {c.imdb_min_rating:.1f}/10",
     ),
     SourceDef(
         name="metacritic",

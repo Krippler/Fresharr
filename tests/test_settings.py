@@ -4,7 +4,7 @@ import pytest
 
 from fresharr.settings import SettingsError, SettingsStore
 
-DEFAULTS = {"rottentomatoes": True, "imdb": False, "tmdb": False, "trakt": False}
+DEFAULTS = {"rottentomatoes": True, "metacritic": False, "tmdb": False, "trakt": False}
 
 
 def make_store(tmp_path) -> SettingsStore:
@@ -15,19 +15,19 @@ def test_defaults(tmp_path):
     store = make_store(tmp_path)
     assert store.run_interval_days == 1.0
     assert store.is_enabled("rottentomatoes")
-    assert not store.is_enabled("imdb")
+    assert not store.is_enabled("metacritic")
     assert not store.is_enabled("nonexistent")
 
 
 def test_update_persists_across_reload(tmp_path):
     store = make_store(tmp_path)
     store.update({"run_interval_days": 7,
-                  "sources": {"imdb": {"enabled": True},
+                  "sources": {"metacritic": {"enabled": True},
                               "rottentomatoes": {"enabled": False}}})
 
     reloaded = make_store(tmp_path)
     assert reloaded.run_interval_days == 7.0
-    assert reloaded.is_enabled("imdb")
+    assert reloaded.is_enabled("metacritic")
     assert not reloaded.is_enabled("rottentomatoes")
 
 
@@ -44,7 +44,7 @@ def test_interval_clamped_to_daily_minimum(tmp_path):
 def test_unknown_source_rejected(tmp_path):
     store = make_store(tmp_path)
     with pytest.raises(SettingsError, match="Unknown source"):
-        store.update({"sources": {"imdbb": {"enabled": True}}})
+        store.update({"sources": {"unknownsrc": {"enabled": True}}})
 
 
 def test_malformed_payloads_rejected(tmp_path):
@@ -52,7 +52,7 @@ def test_malformed_payloads_rejected(tmp_path):
     with pytest.raises(SettingsError):
         store.update({"run_interval_days": "soon"})
     with pytest.raises(SettingsError):
-        store.update({"sources": {"imdb": {"enabled": "yes"}}})
+        store.update({"sources": {"metacritic": {"enabled": "yes"}}})
     with pytest.raises(SettingsError):
         store.update(None)
 
@@ -105,10 +105,10 @@ def test_invalid_language_codes_rejected(tmp_path):
 def test_partial_update_leaves_rest_alone(tmp_path):
     store = make_store(tmp_path)
     store.update({"run_interval_days": 3})
-    store.update({"sources": {"imdb": {"enabled": True}}})
+    store.update({"sources": {"metacritic": {"enabled": True}}})
     snapshot = store.snapshot()
     assert snapshot["run_interval_days"] == 3.0
-    assert snapshot["sources"]["imdb"]["enabled"]
+    assert snapshot["sources"]["metacritic"]["enabled"]
     assert snapshot["sources"]["rottentomatoes"]["enabled"]  # untouched default
 
 
@@ -126,7 +126,7 @@ def test_options_override_env_config(tmp_path):
         "radarr_url": "http://radarr:7878/",
         "radarr_api_key": "ui-key",
         "rt_min_critics_score": "90",
-        "imdb_min_rating": 8.5,
+        "metacritic_min_score": 88,
         "rt_movie_lists": "movies_in_theaters, movies_at_home",
     }})
 
@@ -136,7 +136,7 @@ def test_options_override_env_config(tmp_path):
     assert effective.radarr_api_key == "ui-key"
     assert effective.radarr_enabled
     assert effective.rt_min_critics_score == 90       # coerced to int
-    assert effective.imdb_min_rating == 8.5
+    assert effective.metacritic_min_score == 88
     assert effective.rt_movie_lists == ["movies_in_theaters", "movies_at_home"]
     assert effective.tmdb_api_key == "env-tmdb"       # env value untouched
     assert env_config.rt_min_critics_score == 80      # original not mutated
@@ -160,4 +160,4 @@ def test_option_validation(tmp_path):
     with pytest.raises(SettingsError, match="at least"):
         store.update({"options": {"max_items_per_run": 0}})
     with pytest.raises(SettingsError, match="must be a number"):
-        store.update({"options": {"imdb_min_rating": "high"}})
+        store.update({"options": {"metacritic_min_score": "high"}})

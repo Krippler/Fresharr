@@ -43,7 +43,7 @@ def test_overview_lists_all_sources(env):
     client, _, _ = env
     data = client.get("/api/overview").get_json()
     names = {s["name"] for s in data["sources"]}
-    assert names == {"rottentomatoes", "imdb", "metacritic", "letterboxd",
+    assert names == {"rottentomatoes", "metacritic", "letterboxd",
                      "tmdb", "trakt", "anilist", "myanimelist"}
     rt = next(s for s in data["sources"] if s["name"] == "rottentomatoes")
     assert rt["enabled"] and rt["configured"]
@@ -58,9 +58,9 @@ def test_overview_lists_all_sources(env):
 def test_toggle_source(env):
     client, settings, _ = env
     resp = client.post("/api/settings",
-                       json={"sources": {"imdb": {"enabled": True}}})
+                       json={"sources": {"metacritic": {"enabled": True}}})
     assert resp.status_code == 200
-    assert settings.is_enabled("imdb")
+    assert settings.is_enabled("metacritic")
 
 
 def test_interval_update_and_clamp(env):

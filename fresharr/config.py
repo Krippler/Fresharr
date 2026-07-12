@@ -56,12 +56,6 @@ class Config:
     rt_min_audience_score: int = 0
     rt_max_pages: int = 2
 
-    # IMDb
-    imdb_movie_charts: list[str] = field(default_factory=lambda: ["moviemeter"])
-    imdb_tv_charts: list[str] = field(default_factory=lambda: ["tvmeter"])
-    imdb_min_rating: float = 7.0
-    imdb_min_votes: int = 0
-
     # TMDB
     tmdb_api_key: str = ""
     tmdb_min_rating: float = 7.5
@@ -141,10 +135,6 @@ class Config:
             rt_min_critics_score=_int("RT_MIN_CRITICS_SCORE", 80),
             rt_min_audience_score=_int("RT_MIN_AUDIENCE_SCORE", 0),
             rt_max_pages=_int("RT_MAX_PAGES", 2),
-            imdb_movie_charts=_list("IMDB_MOVIE_CHARTS", "moviemeter"),
-            imdb_tv_charts=_list("IMDB_TV_CHARTS", "tvmeter"),
-            imdb_min_rating=_float("IMDB_MIN_RATING", 7.0),
-            imdb_min_votes=_int("IMDB_MIN_VOTES", 0),
             tmdb_api_key=_str("TMDB_API_KEY"),
             tmdb_min_rating=_float("TMDB_MIN_RATING", 7.5),
             tmdb_min_votes=_int("TMDB_MIN_VOTES", 50),

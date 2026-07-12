@@ -9,7 +9,7 @@
 > are very welcome via [issues](https://github.com/krippler/fresharr/issues).
 
 Fresharr discovers **new and highly rated movies, TV shows & anime** from Rotten
-Tomatoes, IMDb, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and
+Tomatoes, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and
 automatically adds them to **Radarr** and **Sonarr**. Pick your sites and schedule
 in the web interface, set minimum score thresholds, and let your library grow with
 well-reviewed releases — no manual searching.
@@ -29,7 +29,7 @@ and `DRY_RUN`. In the UI you control:
   Fields save as you leave them and apply on the next run.
 - **Which discovery sites are used** — enable or disable each site individually
   with a toggle, and set each site's score threshold and **minimum number of
-  reviews/ratings** (on sites that report one: IMDb, TMDB, Trakt, Letterboxd,
+  reviews/ratings** (on sites that report one: TMDB, Trakt, Letterboxd,
   MyAnimeList) right on its row. Sites that need an API key (TMDB, Trakt) take
   it in the same place.
 - **The run schedule** — from once a day (the most frequent allowed) up to every
@@ -58,12 +58,11 @@ falls back to the environment value.
 
 | Site | Needs | What it finds |
 |---|---|---|
-| **Rotten Tomatoes** (default on) | nothing | Browse lists (Certified Fresh in theaters / at home, Fresh TV) filtered by Tomatometer / audience score. |
-| **IMDb** | nothing | Most Popular Movies & TV charts, filtered by IMDb rating. |
+| **Rotten Tomatoes** (default on) | nothing | Certified-fresh theatrical releases filtered by Tomatometer / audience score. |
 | **Metacritic** | nothing | Recent movies & TV from the browse charts, filtered by Metascore. |
-| **Letterboxd** | nothing | Films popular this week, filtered by Letterboxd star rating (movies only). |
-| **TMDB** | free API key ([themoviedb.org](https://www.themoviedb.org/settings/api)) | Official API: recently released, highly rated titles. Most stable source, exact ID matches. |
-| **Trakt** | free API app client ID ([trakt.tv](https://trakt.tv/oauth/applications)) | Trending movies & shows, filtered by Trakt rating. Exact ID matches. |
+| **TMDB** | free API key ([themoviedb.org](https://www.themoviedb.org/settings/api)) | Official API: recently released, highly rated titles. Most stable source, exact ID matches. **Recommended.** |
+| **Trakt** | free API app client ID ([trakt.tv](https://trakt.tv/oauth/applications)) | Trending movies & shows, filtered by Trakt rating. Exact ID matches. **Recommended.** |
+| **Letterboxd** (default off) | nothing | Films popular this week, filtered by Letterboxd star rating (movies only). Letterboxd rate-limits/blocks automated requests, so this source is unreliable — TMDB is the dependable alternative. |
 
 ### Anime
 
@@ -76,9 +75,12 @@ Anime handling: series are added to Sonarr with the **anime** series type
 (absolute episode numbering), anime films go to Radarr, and both the English and
 romaji titles are used when matching — whichever your indexers know the show by.
 
-Rotten Tomatoes, IMDb, Metacritic and Letterboxd have no public APIs, so those
-sources parse the sites' own page data defensively — if a site changes its
-layout, Fresharr logs a warning and carries on with the other sources.
+Rotten Tomatoes, Metacritic and Letterboxd have no public APIs, so those sources
+parse the sites' own page data defensively — if a site changes its layout,
+Fresharr logs a warning and carries on with the other sources. For the most
+reliable results, enable **TMDB** and/or **Trakt**: they are official APIs that
+also report original language and vote counts (so the language and minimum-review
+filters work fully on them).
 
 ## How it works
 
@@ -158,7 +160,6 @@ and the UI value overrides it.
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `RETRY_NOT_FOUND_DAYS` | `7` | Re-try titles that had no Radarr/Sonarr match after this many days. |
 | `RT_MAX_PAGES` | `2` | Rotten Tomatoes pages fetched per list (~30 titles per page). |
-| `IMDB_MOVIE_CHARTS` / `IMDB_TV_CHARTS` | `moviemeter` / `tvmeter` | IMDb chart paths. |
 | `TMDB_MIN_VOTES` | `50` | Minimum TMDB vote count (filters out obscure titles). |
 | `TMDB_RELEASED_WITHIN_DAYS` | `90` | TMDB: only titles released in the last N days. |
 | `TMDB_MOVIES` / `TMDB_TV` | `true` | Toggle movie/TV discovery for the TMDB site. |
@@ -180,11 +181,12 @@ RADARR_URL=http://localhost:7878 RADARR_API_KEY=... DRY_RUN=true fresharr
 
 ## A note on scraping
 
-Rotten Tomatoes and IMDb have no official APIs, so those sources use the same
-data the sites' own pages load. Those endpoints can change without warning; when
-they do, Fresharr logs a warning and keeps running. For fully supported data
-sources, use TMDB or Trakt. Please be considerate: Fresharr never checks more
-than once a day by design, and keeps `RT_MAX_PAGES` small.
+Rotten Tomatoes, Metacritic and Letterboxd have no official APIs, so those
+sources parse the same data the sites' own pages load. Those pages can change or
+start blocking automated requests without warning; when they do, Fresharr logs a
+warning and keeps running. For fully supported data sources, use **TMDB** or
+**Trakt** — official APIs that don't block. Please be considerate: Fresharr never
+checks more than once a day by design, and keeps `RT_MAX_PAGES` small.
 
 ## License
 

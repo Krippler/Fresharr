@@ -6,7 +6,7 @@ from fresharr.config import Config
 def _clear_env(monkeypatch):
     import os
     for key in list(os.environ):
-        if key.split("_")[0] in ("RT", "TMDB", "IMDB", "TRAKT", "RADARR", "SONARR") \
+        if key.split("_")[0] in ("RT", "TMDB", "TRAKT", "RADARR", "SONARR") \
                 or key in ("DRY_RUN", "RUN_ONCE", "MIN_YEAR", "MAX_ITEMS_PER_RUN",
                            "STATE_FILE", "SETTINGS_FILE", "STATUS_FILE", "CONFIG_DIR",
                            "LOG_LEVEL", "RETRY_NOT_FOUND_DAYS", "WEB_PORT"):
@@ -29,7 +29,6 @@ def test_minimal_radarr_config(monkeypatch):
     assert cfg.radarr_enabled
     assert not cfg.sonarr_enabled
     assert cfg.rt_min_critics_score == 80
-    assert cfg.imdb_min_rating == 7.0
     assert cfg.web_port == 8383
     assert cfg.state_file == "/config/state.json"
     assert cfg.settings_file == "/config/settings.json"
