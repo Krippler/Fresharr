@@ -69,9 +69,8 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="rottentomatoes",
         label="Rotten Tomatoes",
-        description="Certified-fresh theatrical movies filtered by Tomatometer "
-                    "and audience score. (TV off by default - RT's fresh-TV "
-                    "browse is an evergreen catalog; Metacritic covers new TV.)",
+        description="Certified-fresh theatrical movies by Tomatometer & "
+                    "audience score. Movies only.",
         category=MOVIES_TV,
         default_enabled=True,
         requires="",
@@ -83,8 +82,7 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="metacritic",
         label="Metacritic",
-        description="Recent movies and TV from the browse charts, filtered by "
-                    "Metascore. No API key needed.",
+        description="Recent movies & TV by Metascore.",
         category=MOVIES_TV,
         default_enabled=False,
         requires="",
@@ -94,8 +92,8 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="letterboxd",
         label="Letterboxd",
-        description="Films popular this week, filtered by Letterboxd star rating. "
-                    "Movies only; no API key needed.",
+        description="This week's popular films by star rating. Movies only. "
+                    "Often rate-limited.",
         category=MOVIES_TV,
         default_enabled=False,
         requires="",
@@ -106,8 +104,8 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="tmdb",
         label="TMDB",
-        description="The Movie Database's official API: recently released, highly "
-                    "rated titles. Free API key required (themoviedb.org).",
+        description="Recent, highly-rated titles via the official TMDB API. "
+                    "Reliable.",
         category=MOVIES_TV,
         default_enabled=False,
         requires="TMDB_API_KEY",
@@ -118,8 +116,7 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="trakt",
         label="Trakt",
-        description="Trending movies and shows on trakt.tv, filtered by Trakt "
-                    "rating. Free API app client ID required (trakt.tv/oauth/applications).",
+        description="Trending movies & shows by Trakt rating. Reliable.",
         category=MOVIES_TV,
         default_enabled=False,
         requires="TRAKT_CLIENT_ID",
@@ -129,8 +126,7 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="anilist",
         label="AniList",
-        description="Trending anime (series to Sonarr, films to Radarr), filtered "
-                    "by AniList score. No API key needed.",
+        description="Trending anime by AniList score. Series → Sonarr, films → Radarr.",
         category=ANIME,
         default_enabled=False,
         requires="",
@@ -140,8 +136,7 @@ SOURCE_DEFS: list[SourceDef] = [
     SourceDef(
         name="myanimelist",
         label="MyAnimeList",
-        description="Current season and top airing anime via the Jikan API, "
-                    "filtered by MAL score. No API key needed.",
+        description="Current-season & top airing anime by MAL score.",
         category=ANIME,
         default_enabled=False,
         requires="",

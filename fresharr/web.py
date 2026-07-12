@@ -200,13 +200,17 @@ INDEX_HTML = """<!doctype html>
   * { box-sizing: border-box; margin: 0; }
   body { font: 15px/1.5 system-ui, -apple-system, sans-serif;
          background: #101418; color: #dde3ea; padding: 1.5rem; }
-  .wrap { max-width: 1240px; margin: 0 auto; }
+  .wrap { max-width: 2600px; margin: 0 auto; }
   header { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem;
            flex-wrap: wrap; }
   h1 { font-size: 1.5rem; color: #7bd88f; letter-spacing: .02em; }
   .ver { color: #6b7684; font-size: .8rem; }
-  /* Sections flow into 1/2/3 balanced columns as the window widens. */
-  .cards { column-width: 360px; column-gap: 1rem; }
+  /* Sections flow into 1-4 balanced columns by width; columns widen within
+     each range, and cap at 4 (capped further by .wrap max-width). */
+  .cards { column-count: 1; column-gap: 1.25rem; }
+  @media (min-width: 720px)  { .cards { column-count: 2; } }
+  @media (min-width: 1200px) { .cards { column-count: 3; } }
+  @media (min-width: 1800px) { .cards { column-count: 4; } }
   .card { background: #1a2027; border: 1px solid #2a323c; border-radius: 10px;
           padding: 1rem 1.25rem; margin-bottom: 1rem; break-inside: avoid; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
@@ -328,16 +332,14 @@ INDEX_HTML = """<!doctype html>
       <button class="primary" id="runnow">Run now</button>
     </div>
     <p class="muted" style="margin-top:.5rem">
-      Runs happen at a <strong>random time</strong> around your chosen interval
-      &mdash; never less than 18 hours apart &mdash; so the discovery sites
-      aren't hit at one predictable hour. Daily is the most frequent schedule.
+      Runs at a <strong>random time</strong> around this interval, at least 18h
+      apart. Daily is the maximum.
     </p>
   </div>
 
   <div class="card">
     <h2>Connections</h2>
-    <p class="muted">Changes save as you leave each field and apply on the
-      next run. Clear a field to fall back to the container's environment
+    <p class="muted">Saved on blur, applied next run. Empty = use the env
       default.</p>
     <div class="conns">
       <div class="conn"><h3>Radarr <span class="muted">(movies)</span><span class="state" id="radarr-state"></span></h3>
@@ -362,9 +364,8 @@ INDEX_HTML = """<!doctype html>
   <div class="card">
     <h2>Original language</h2>
     <p class="muted">
-      Only add titles whose original language is selected. Nothing selected =
-      all languages. Applies when a source reports the language (TMDB, Trakt,
-      AniList, MyAnimeList); titles with unknown language always pass.
+      Keep only these original languages (none = all). Applies where the
+      source reports language; unknown always passes.
     </p>
     <div class="langgroup"><span class="k">Movies</span>
       <div class="langs" id="langs-movie"></div>
