@@ -214,13 +214,20 @@ INDEX_HTML = """<!doctype html>
   .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
          color: #5f9c6d; margin-top: .8rem; }
   .cat:first-child { margin-top: 0; }
-  .source { display: flex; align-items: center; gap: .9rem;
-            padding: .6rem 0; border-top: 1px solid #232b34; }
+  .source { border-top: 1px solid #232b34; }
   .cat + .source { border-top: none; }
-  .source .info { flex: 1; }
+  .source-head { display: flex; align-items: center; gap: .7rem;
+                 padding: .6rem 0; cursor: pointer; }
+  .source-head:hover .name { color: #fff; }
+  .chevron { flex-shrink: 0; width: 14px; color: #6b7684; transition: transform .15s;
+             font-size: .8rem; line-height: 1; }
+  .source.open .chevron { transform: rotate(90deg); color: #8b96a5; }
+  .source .info { flex: 1; min-width: 0; }
   .source .name { font-weight: 600; }
   .source .desc { color: #8b96a5; font-size: .82rem; }
-  .source .detail { color: #6b7684; font-size: .78rem; }
+  .source .detail { color: #6b7684; font-size: .78rem; margin-top: .1rem; }
+  .source .srcopts { display: none; padding: 0 0 .7rem 1.4rem; }
+  .source.open .srcopts { display: block; }
   .badge { font-size: .7rem; padding: .1rem .45rem; border-radius: 99px;
            border: 1px solid #5a4a1a; color: #d8b44a; white-space: nowrap; }
   .switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
@@ -442,20 +449,24 @@ function render(o) {
   });
   $("sources").innerHTML = [...groups.entries()].map(([cat, list]) =>
     `<div class="cat">${cat}</div>` + list.map(s => `
-    <div class="source">
-      <div class="info">
-        <span class="name">${s.label}</span>
-        ${!s.configured ? `<span class="badge">needs ${s.requires.replaceAll("_", " ").toLowerCase()} below</span>` : ""}
-        <div class="desc">${s.description}</div>
-        <div class="srcopts"><div class="optgrid">
-          ${s.options.map(optionInput).join("")}
-        </div></div>
+    <div class="source ${expandedSources.has(s.name) ? "open" : ""}" data-src="${s.name}">
+      <div class="source-head">
+        <span class="chevron">&#9656;</span>
+        <div class="info">
+          <span class="name">${s.label}</span>
+          ${!s.configured ? `<span class="badge">needs ${s.requires.replaceAll("_", " ").toLowerCase()}</span>` : ""}
+          <div class="desc">${s.description}</div>
+          <div class="detail">${s.detail}</div>
+        </div>
+        <label class="switch" title="${s.enabled ? "Enabled" : "Disabled"}">
+          <input type="checkbox" data-source="${s.name}"
+                 ${s.enabled ? "checked" : ""} ${!s.configured && !s.enabled ? "disabled" : ""}>
+          <span class="slider"></span>
+        </label>
       </div>
-      <label class="switch">
-        <input type="checkbox" data-source="${s.name}"
-               ${s.enabled ? "checked" : ""} ${!s.configured && !s.enabled ? "disabled" : ""}>
-        <span class="slider"></span>
-      </label>
+      <div class="srcopts"><div class="optgrid">
+        ${s.options.map(optionInput).join("")}
+      </div></div>
     </div>`).join("")).join("");
 
   $("conn-radarr").innerHTML = o.connections.radarr.map(optionInput).join("");
@@ -465,6 +476,18 @@ function render(o) {
   renderConnState("sonarr", o.arr.sonarr);
   wireOptionInputs();
 
+  // Expand/collapse a site by clicking its header (but not the toggle).
+  document.querySelectorAll(".source-head").forEach(head => {
+    head.addEventListener("click", ev => {
+      if (ev.target.closest(".switch")) return;
+      const row = head.closest(".source");
+      const name = row.dataset.src;
+      if (expandedSources.has(name)) expandedSources.delete(name);
+      else expandedSources.add(name);
+      row.classList.toggle("open");
+    });
+  });
+
   document.querySelectorAll("[data-source]").forEach(box => {
     box.addEventListener("change", async () => {
       try {
@@ -472,6 +495,7 @@ function render(o) {
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({sources: {[box.dataset.source]: {enabled: box.checked}}})});
         toast((box.checked ? "Enabled " : "Disabled ") + box.dataset.source);
+        box.closest(".switch").title = box.checked ? "Enabled" : "Disabled";
       } catch (e) { toast(e.message, true); box.checked = !box.checked; }
     });
   });
@@ -493,6 +517,7 @@ function escapeHtml(value) {
 }
 
 const arrChoices = {radarr: null, sonarr: null};
+const expandedSources = new Set();  // sites whose settings are shown (persists across re-renders)
 let lastOverview = null;
 
 function optionInput(opt) {
