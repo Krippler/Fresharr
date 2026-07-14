@@ -299,6 +299,7 @@ INDEX_HTML = """<!doctype html>
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
   input:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
   .srcopts { margin-top: .4rem; }
+  .srcopts .desc { margin-bottom: .5rem; }
   .srcopts .optgrid { margin-top: .2rem; }
   .langgroup { margin-top: .6rem; }
   .langgroup .k { color: #8b96a5; font-size: .75rem; text-transform: uppercase;
@@ -472,7 +473,6 @@ function render(o) {
         <div class="info">
           <span class="name">${s.label}</span>
           ${!s.configured ? `<span class="badge">needs ${s.requires.replaceAll("_", " ").toLowerCase()}</span>` : ""}
-          <div class="desc">${s.description}</div>
           <div class="detail">${s.detail}</div>
         </div>
         <label class="switch" title="${s.enabled ? "Enabled" : "Disabled"}">
@@ -481,9 +481,10 @@ function render(o) {
           <span class="slider"></span>
         </label>
       </div>
-      <div class="srcopts"><div class="optgrid">
-        ${s.options.map(optionInput).join("")}
-      </div></div>
+      <div class="srcopts">
+        <div class="desc">${s.description}</div>
+        <div class="optgrid">${s.options.map(optionInput).join("")}</div>
+      </div>
     </div>`;
   const isAnime = s => s.category.toLowerCase().includes("anime");
   $("sources-mediatv").innerHTML = o.sources.filter(s => !isAnime(s)).map(sourceRow).join("");
