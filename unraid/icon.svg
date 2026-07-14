@@ -1,0 +1,42 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5fc98a"/>
+      <stop offset="1" stop-color="#2c8f56"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.22" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eafff2"/>
+    </linearGradient>
+    <filter id="ds" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0a3c22" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <!-- background squircle -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#sheen)"/>
+  <rect x="18.5" y="18.5" width="475" height="475" rx="114" fill="none"
+        stroke="#ffffff" stroke-opacity="0.18" stroke-width="3"/>
+
+  <!-- fresh sprout above the play mark -->
+  <g filter="url(#ds)">
+    <path d="M256 214 C256 184 256 168 256 150" fill="none"
+          stroke="#eafff2" stroke-width="16" stroke-linecap="round"/>
+    <!-- left leaf -->
+    <path d="M256 186 C226 182 202 158 200 126 C232 128 256 150 256 186 Z"
+          fill="#dff8e7"/>
+    <!-- right leaf -->
+    <path d="M256 172 C282 166 302 144 306 116 C278 120 256 140 256 172 Z"
+          fill="#cff2db"/>
+  </g>
+
+  <!-- play triangle (rounded) -->
+  <path d="M214 226 L214 366 L338 296 Z"
+        fill="url(#play)" stroke="url(#play)" stroke-width="30"
+        stroke-linejoin="round" filter="url(#ds)"/>
+</svg>

@@ -51,6 +51,10 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
     def index():
         return INDEX_HTML
 
+    @app.get("/favicon.svg")
+    def favicon():
+        return app.response_class(FAVICON_SVG, mimetype="image/svg+xml")
+
     @app.get("/health")
     def health():
         return {"status": "ok", "version": __version__}
@@ -189,12 +193,25 @@ def _recent_additions(config: Config, limit: int = 15) -> list[dict]:
     return added[:limit]
 
 
+# Flat, filter-free variant of unraid/icon.svg so it stays crisp as a favicon.
+FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
+    '<rect x="16" y="16" width="480" height="480" rx="116" fill="#3ba368"/>'
+    '<path d="M256 214C256 184 256 168 256 150" fill="none" stroke="#eafff2" '
+    'stroke-width="16" stroke-linecap="round"/>'
+    '<path d="M256 186C226 182 202 158 200 126 232 128 256 150 256 186Z" fill="#dff8e7"/>'
+    '<path d="M256 172C282 166 302 144 306 116 278 120 256 140 256 172Z" fill="#cff2db"/>'
+    '<path d="M214 226 214 366 338 296Z" fill="#fff" stroke="#fff" '
+    'stroke-width="30" stroke-linejoin="round"/></svg>'
+)
+
 INDEX_HTML = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fresharr</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; }
