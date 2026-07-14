@@ -36,7 +36,7 @@ def test_index_serves_ui(env):
     resp = client.get("/")
     assert resp.status_code == 200
     assert b"Fresharr" in resp.data
-    assert b"Discovery sites" in resp.data
+    assert b"Discovery &mdash; Movies" in resp.data
 
 
 def test_overview_lists_all_sources(env):

@@ -232,11 +232,8 @@ INDEX_HTML = """<!doctype html>
           padding: 1rem 1.25rem; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
        color: #8b96a5; margin-bottom: .75rem; }
-  .cat { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
-         color: #5f9c6d; margin-top: .8rem; }
-  .cat:first-child { margin-top: 0; }
   .source { border-top: 1px solid #232b34; }
-  .cat + .source { border-top: none; }
+  .source:first-child { border-top: none; }
   .source-head { display: flex; align-items: center; gap: .7rem;
                  padding: .6rem 0; cursor: pointer; }
   .source-head:hover .name { color: #fff; }
@@ -372,8 +369,13 @@ INDEX_HTML = """<!doctype html>
   </div>
 
   <div class="card">
-    <h2>Discovery sites</h2>
-    <div id="sources"></div>
+    <h2>Discovery &mdash; Movies &amp; TV</h2>
+    <div id="sources-mediatv"></div>
+  </div>
+
+  <div class="card">
+    <h2>Discovery &mdash; Anime</h2>
+    <div id="sources-anime"></div>
   </div>
 
   <div class="card">
@@ -463,13 +465,7 @@ function render(o) {
   }
   sel.value = days;
 
-  const groups = new Map();
-  o.sources.forEach(s => {
-    if (!groups.has(s.category)) groups.set(s.category, []);
-    groups.get(s.category).push(s);
-  });
-  $("sources").innerHTML = [...groups.entries()].map(([cat, list]) =>
-    `<div class="cat">${cat}</div>` + list.map(s => `
+  const sourceRow = s => `
     <div class="source ${expandedSources.has(s.name) ? "open" : ""}" data-src="${s.name}">
       <div class="source-head">
         <span class="chevron">&#9656;</span>
@@ -488,7 +484,10 @@ function render(o) {
       <div class="srcopts"><div class="optgrid">
         ${s.options.map(optionInput).join("")}
       </div></div>
-    </div>`).join("")).join("");
+    </div>`;
+  const isAnime = s => s.category.toLowerCase().includes("anime");
+  $("sources-mediatv").innerHTML = o.sources.filter(s => !isAnime(s)).map(sourceRow).join("");
+  $("sources-anime").innerHTML = o.sources.filter(isAnime).map(sourceRow).join("");
 
   $("conn-radarr").innerHTML = o.connections.radarr.map(optionInput).join("");
   $("conn-sonarr").innerHTML = o.connections.sonarr.map(optionInput).join("");
@@ -706,19 +705,38 @@ function layoutMasonry(force) {
   const n = columnsForWidth();
   if (!force && n === lastColCount) return;
   lastColCount = n;
+  const gap = 20;
+  // Measure each card at its real column width first (an element inside a
+  // detached column reports offsetHeight 0, which is why balancing used to
+  // fall back to round-robin). Stack them full-width but constrained to the
+  // target column width, read heights in one batch, then distribute.
+  const colWidth = (container.clientWidth - (n - 1) * gap) / n;
+  container.replaceChildren(...cardEls);
+  container.style.display = "block";
+  cardEls.forEach(c => { c.style.width = colWidth + "px"; });
+  const measured = cardEls.map(c => c.getBoundingClientRect().height);
+  cardEls.forEach(c => { c.style.width = ""; });
+  container.style.display = "";
+
   const cols = [];
   const heights = [];
   for (let i = 0; i < n; i++) {
     const c = document.createElement("div"); c.className = "col";
     cols.push(c); heights.push(0);
   }
-  // Place each card (in source order) into the currently shortest column.
-  cardEls.forEach(card => {
+  // Tallest-first into the shortest column (longest-processing-time
+  // scheduling) gives the most even columns. Status is pinned to the first
+  // column so the summary stays top-left regardless.
+  const rest = cardEls.map((c, i) => i).slice(1)
+                      .sort((a, b) => measured[b] - measured[a]);
+  const place = idx => {
     let mi = 0;
     for (let i = 1; i < n; i++) if (heights[i] < heights[mi]) mi = i;
-    cols[mi].appendChild(card);
-    heights[mi] += card.offsetHeight + 20;
-  });
+    cols[mi].appendChild(cardEls[idx]);
+    heights[mi] += measured[idx] + gap;
+  };
+  place(0);            // Status card first, into column 0
+  rest.forEach(place);
   container.replaceChildren(...cols);
 }
 let resizeTimer = null;
