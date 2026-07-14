@@ -51,8 +51,9 @@ FILM_PAGES = {
 
 
 class FakeResponse:
-    def __init__(self, text):
+    def __init__(self, text, status_code=200):
         self.text = text
+        self.status_code = status_code
 
     def raise_for_status(self):
         pass
@@ -65,7 +66,9 @@ def make_source(**overrides) -> LetterboxdSource:
     return LetterboxdSource(cfg)
 
 
-def fake_get(url, timeout=None):
+def fake_get(url, headers=None, timeout=None):
+    if url.rstrip("/") == "https://letterboxd.com":       # homepage priming
+        return FakeResponse("<html></html>")
     if "/films/" in url and "/film/" not in url:
         return FakeResponse(LIST_HTML)
     slug = url.rstrip("/").rsplit("/", 1)[-1]
@@ -96,14 +99,14 @@ def test_max_films_cap(monkeypatch):
     source = make_source(letterboxd_min_rating=0, letterboxd_max_films=1)
     calls = []
 
-    def counting_get(url, timeout=None):
+    def counting_get(url, headers=None, timeout=None):
         calls.append(url)
-        return fake_get(url)
+        return fake_get(url, headers, timeout)
 
     monkeypatch.setattr(source.session, "get", counting_get)
     source.fetch()
-    # 1 list request + 1 film request (cap), despite 2 unique slugs
-    assert len(calls) == 2
+    # Only 1 film fetched (cap), despite 2 unique slugs on the list.
+    assert len([u for u in calls if "/film/" in u]) == 1
 
 
 def test_cdata_wrapper_stripped():
@@ -114,5 +117,28 @@ def test_cdata_wrapper_stripped():
 def test_layout_change_degrades_gracefully(monkeypatch):
     source = make_source()
     monkeypatch.setattr(source.session, "get",
-                        lambda url, timeout=None: FakeResponse("<html>redesign</html>"))
+                        lambda url, headers=None, timeout=None: FakeResponse("<html>redesign</html>"))
     assert source.fetch() == []
+
+
+def test_retries_once_on_403(monkeypatch):
+    # The list 403s the first time, then succeeds after re-priming.
+    source = make_source(letterboxd_min_rating=3.5)
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    seen = {"list": 0}
+
+    def flaky_get(url, headers=None, timeout=None):
+        if "/films/" in url and "/film/" not in url:
+            seen["list"] += 1
+            if seen["list"] == 1:
+                return FakeResponse("", status_code=403)
+            return FakeResponse(LIST_HTML)
+        if url.rstrip("/") == "https://letterboxd.com":
+            return FakeResponse("<html></html>")
+        slug = url.rstrip("/").rsplit("/", 1)[-1]
+        return FakeResponse(FILM_PAGES.get(slug, "<html></html>"))
+
+    monkeypatch.setattr(source.session, "get", flaky_get)
+    items = source.fetch()
+    assert seen["list"] == 2                       # retried after the 403
+    assert [i.title for i in items] == ["The Substance"]

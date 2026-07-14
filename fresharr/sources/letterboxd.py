@@ -18,15 +18,38 @@ from ..models import MOVIE, MediaItem
 
 log = logging.getLogger(__name__)
 
-# The /films/ajax/ endpoint is Cloudflare-gated (403 for non-browser
-# clients); the regular rendered page serves the same poster grid.
+HOME_URL = "https://letterboxd.com/"
 LIST_URL = "https://letterboxd.com/films/{list_path}/"
 FILM_URL = "https://letterboxd.com/film/{slug}/"
 
+# Letterboxd sits behind Cloudflare, which 403s requests that don't look
+# like a real browser navigation. A full, self-consistent header set (UA
+# matched to the Sec-CH-UA platform) plus priming the session with the
+# homepage first (to pick up cookies) gets past the header/reputation
+# checks most of the time; a hard JS challenge still can't be solved
+# without a browser, so this degrades to a logged warning.
 USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
+
+BROWSER_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,image/apng,*/*;q=0.8,"
+              "application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "Sec-Ch-Ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Cache-Control": "max-age=0",
+}
 
 # Poster slugs appear under different attributes across Letterboxd
 # redesigns; each is tried in order.
@@ -50,12 +73,19 @@ class LetterboxdSource:
         self.max_films = config.letterboxd_max_films
         self.list_path = config.letterboxd_list.strip("/")
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                      "image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        })
+        self.session.headers.update(BROWSER_HEADERS)
+        self._primed = False
+
+    def _prime(self) -> None:
+        """Warm the session with the homepage so Cloudflare cookies are set
+        before the first real request (a browser always has these)."""
+        if self._primed:
+            return
+        self._primed = True
+        try:
+            self.session.get(HOME_URL, timeout=20)
+        except requests.RequestException as exc:
+            log.debug("Letterboxd homepage priming failed: %s", exc)
 
     def fetch(self) -> list[MediaItem]:
         slugs = self._fetch_slugs()
@@ -71,13 +101,30 @@ class LetterboxdSource:
                  min(len(slugs), self.max_films), len(items), self.min_rating)
         return items
 
+    def _get(self, url: str, *, referer: str | None = None):
+        headers = {"Sec-Fetch-Site": "same-origin"} if referer else {}
+        if referer:
+            headers["Referer"] = referer
+        return self.session.get(url, headers=headers, timeout=30)
+
     def _fetch_slugs(self) -> list[str]:
         url = LIST_URL.format(list_path=self.list_path)
+        self._prime()
         try:
-            resp = self.session.get(url, timeout=30)
+            resp = self._get(url, referer=HOME_URL)
+            # A Cloudflare block is header-driven; re-priming and one retry
+            # after a short pause often clears an intermittent 403.
+            if resp.status_code == 403:
+                import time
+                time.sleep(2)
+                self._primed = False
+                self._prime()
+                resp = self._get(url, referer=HOME_URL)
             resp.raise_for_status()
         except requests.RequestException as exc:
-            log.warning("Letterboxd list %r failed: %s", self.list_path, exc)
+            log.warning("Letterboxd list %r failed: %s (Cloudflare blocks "
+                        "server requests; TMDB is the reliable movie source)",
+                        self.list_path, exc)
             return []
         slugs: list[str] = []
         for pattern in _SLUG_RES:
@@ -91,8 +138,9 @@ class LetterboxdSource:
         return slugs
 
     def _fetch_film(self, slug: str) -> MediaItem | None:
+        list_url = LIST_URL.format(list_path=self.list_path)
         try:
-            resp = self.session.get(FILM_URL.format(slug=slug), timeout=30)
+            resp = self._get(FILM_URL.format(slug=slug), referer=list_url)
             resp.raise_for_status()
         except requests.RequestException as exc:
             log.debug("Letterboxd film %r failed: %s", slug, exc)
