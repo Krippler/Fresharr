@@ -789,53 +789,20 @@ function layoutMasonry(force) {
   const n = columnsForWidth();
   if (!force && n === lastColCount) return;
   lastColCount = n;
-  const gap = 20;
-
   const cols = [];
   for (let i = 0; i < n; i++) {
     const c = document.createElement("div"); c.className = "col";
     cols.push(c);
   }
 
-  // One column: just stack every card in DOM order.
-  if (n === 1) {
-    cols[0].append(...cardEls);
-    container.replaceChildren(cols[0]);
-    return;
-  }
-
-  // Three columns: each card goes to its assigned column (data-col).
-  if (n >= 3) {
-    cardEls.forEach(card => {
-      const col = Math.min(Number(card.dataset.col) || 0, n - 1);
-      cols[col].appendChild(card);
-    });
-    container.replaceChildren(...cols);
-    return;
-  }
-
-  // Two columns: keep the same card order but split the sequence in two at
-  // the point that best balances height, so reading down column 1 then
-  // column 2 follows the exact same order as one column. Measure each card
-  // at its real column width first (a detached column reports offsetHeight
-  // 0, which is why balancing used to fall back to round-robin).
-  const colWidth = (container.clientWidth - (n - 1) * gap) / n;
-  container.replaceChildren(...cardEls);
-  container.style.display = "block";
-  cardEls.forEach(c => { c.style.width = colWidth + "px"; });
-  const measured = cardEls.map(c => c.getBoundingClientRect().height + gap);
-  cardEls.forEach(c => { c.style.width = ""; });
-  container.style.display = "";
-
-  const total = measured.reduce((a, b) => a + b, 0);
-  let prefix = 0, best = Infinity, split = 1;
-  for (let k = 1; k < cardEls.length; k++) {
-    prefix += measured[k - 1];
-    const worst = Math.max(prefix, total - prefix);
-    if (worst < best) { best = worst; split = k; }
-  }
-  cols[0].append(...cardEls.slice(0, split));
-  cols[1].append(...cardEls.slice(split));
+  // Every card keeps its assigned column group (data-col). With fewer
+  // columns than groups, trailing groups fold into the last column, so the
+  // card order and each column's starting card stay identical across the
+  // 3-, 2- and 1-column layouts.
+  cardEls.forEach(card => {
+    const col = Math.min(Number(card.dataset.col) || 0, n - 1);
+    cols[col].appendChild(card);
+  });
   container.replaceChildren(...cols);
 }
 let resizeTimer = null;
