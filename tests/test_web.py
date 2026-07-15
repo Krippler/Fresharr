@@ -121,6 +121,26 @@ def test_unknown_source_is_400(env):
     assert "Unknown source" in resp.get_json()["error"]
 
 
+def test_settings_locked_while_running(env):
+    client, settings, scheduler = env
+    scheduler.running = True
+    # A normal settings change is rejected with 409 while a run is in progress.
+    resp = client.post("/api/settings", json={"run_interval_days": 7})
+    assert resp.status_code == 409
+    assert "run is in progress" in resp.get_json()["error"]
+    assert settings.run_interval_days == 1.0  # unchanged
+
+    # Card layout is a UI preference, so it's still allowed mid-run.
+    resp = client.post("/api/settings",
+                       json={"card_layout": {"1": [["status", "schedule"]]}})
+    assert resp.status_code == 200
+
+    # Once the run finishes, settings can change again.
+    scheduler.running = False
+    assert client.post("/api/settings", json={"run_interval_days": 7}).status_code == 200
+    assert settings.run_interval_days == 7.0
+
+
 def test_run_now(env):
     client, _, scheduler = env
     assert client.post("/api/run").status_code == 200

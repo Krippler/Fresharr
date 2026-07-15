@@ -92,6 +92,13 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
     @app.post("/api/settings")
     def update_settings():
         payload = request.get_json(silent=True)
+        # Settings are locked while a run is in progress so configuration can't
+        # change underneath it. Card layout is a pure UI preference, so a
+        # layout-only change is still allowed.
+        if scheduler.running and not (isinstance(payload, dict)
+                                      and set(payload) <= {"card_layout"}):
+            return jsonify({"error": "A run is in progress; settings are "
+                            "locked until it finishes."}), 409
         try:
             snapshot = settings.update(payload)
         except SettingsError as exc:
@@ -347,6 +354,15 @@ INDEX_HTML = """<!doctype html>
             border-radius: 6px; cursor: pointer; font-size: .85rem; color: #c3ccd6; }
   .dd-opt:hover { background: #232b34; }
   .dd-opt input { accent-color: #2f6b3d; }
+  .lockbanner { display: flex; align-items: center; gap: .55rem; margin-bottom: 1rem;
+                padding: .55rem .9rem; border-radius: 8px; font-size: .85rem;
+                background: #33320f; color: #e8dc8a; border: 1px solid #5a561a; }
+  .lockbanner[hidden] { display: none; }   /* display:flex would defeat [hidden] */
+  .lockbanner .spin { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+                      border: 2px solid #756f2a; border-top-color: #e8dc8a;
+                      animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #cards.locked { opacity: .96; }
   ul.recent { list-style: none; }
   ul.recent li { padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
   ul.recent li:first-child { border-top: none; }
@@ -372,6 +388,11 @@ INDEX_HTML = """<!doctype html>
     <span class="dry" id="dryrun" hidden>DRY RUN &mdash; nothing is sent to Radarr/Sonarr</span>
     <button class="ghostbtn" id="resetlayout" hidden>Reset layout</button>
   </header>
+
+  <div class="lockbanner" id="lockbanner" hidden>
+    <span class="spin"></span>A run is in progress &mdash; settings are locked
+    until it finishes.
+  </div>
 
   <div class="cards" id="cards" style="visibility:hidden">
   <div class="card" data-col="0" data-card="status">
@@ -603,6 +624,22 @@ function render(o) {
                `${escapeHtml(r.title)}<span class="when">${fmtTime(r.at)}</span></li>`;
       }).join("")
     : '<li class="muted">Nothing yet.</li>';
+
+  $("lockbanner").hidden = !o.running;
+  setControlsLocked(o.running);
+}
+
+// While a run is in progress every setting control is disabled so config
+// can't change underneath it. Card drag/reset stays live (layout is a UI
+// preference, not a setting). Controls rebuilt each render restore their own
+// natural disabled state when unlocked, so this only force-disables.
+function setControlsLocked(locked) {
+  $("cards").classList.toggle("locked", locked);
+  $("interval").disabled = locked;   // static element: toggle both ways
+  if (locked) {
+    document.querySelectorAll("#cards [data-opt], [data-source], .dd-trigger")
+      .forEach(el => { el.disabled = true; });
+  }
 }
 
 function escapeHtml(value) {
