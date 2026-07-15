@@ -782,25 +782,33 @@ function renderConnState(app, configured) {
   }
 }
 
-// Run Now is only usable once every configured connection has actually
-// connected (and at least one is), so a run is never fired against an app
-// that is still starting, unreachable, or not set up yet.
+// Run Now unlocks once there's somewhere to send titles and something to
+// discover: at least one connected app (Radarr OR Sonarr - one is enough,
+// even if the other is down or unconfigured) and at least one discovery site
+// that is enabled and configured.
+function arrConnectedAny() {
+  return !!lastOverview && ["radarr", "sonarr"].some(
+    a => lastOverview.arr[a] && arrChoices[a] && arrChoices[a].connected);
+}
+
+function siteReady() {
+  return !!lastOverview && (lastOverview.sources || []).some(
+    s => s.enabled && s.configured);
+}
+
 function runReady() {
-  if (!lastOverview) return false;
-  const configured = ["radarr", "sonarr"].filter(a => lastOverview.arr[a]);
-  if (!configured.length) return false;
-  return configured.every(a => arrChoices[a] && arrChoices[a].connected);
+  return arrConnectedAny() && siteReady();
 }
 
 function updateRunButton() {
   const btn = $("runnow");
   if (!btn) return;
   const running = lastOverview && lastOverview.running;
-  const ready = runReady();
-  btn.disabled = !!running || !ready;
+  btn.disabled = !!running || !runReady();
   btn.title = running ? "A run is already in progress"
-    : ready ? "Run discovery now"
-    : "Connect Radarr and/or Sonarr first";
+    : !arrConnectedAny() ? "Connect Radarr or Sonarr first"
+    : !siteReady() ? "Enable a discovery site first"
+    : "Run discovery now";
 }
 
 function langSummary(options, selected) {
