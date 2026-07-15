@@ -349,13 +349,13 @@ INDEX_HTML = """<!doctype html>
   </header>
 
   <div class="cards" id="cards" style="visibility:hidden">
-  <div class="card">
+  <div class="card" data-col="0">
     <h2>Status</h2>
     <div class="stat" id="status">Loading&hellip;</div>
     <p class="muted err" id="lasterror" hidden></p>
   </div>
 
-  <div class="card">
+  <div class="card" data-col="0">
     <h2>Schedule</h2>
     <div class="row">
       <label for="interval">Check for new titles</label>
@@ -375,7 +375,7 @@ INDEX_HTML = """<!doctype html>
     </p>
   </div>
 
-  <div class="card">
+  <div class="card" data-col="0">
     <h2>Connections</h2>
     <div class="conn-row" data-conn="radarr">
       <div class="conn-head">
@@ -403,22 +403,17 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-col="1">
     <h2>Discovery &mdash; Movies &amp; TV</h2>
     <div id="sources-mediatv"></div>
   </div>
 
-  <div class="card">
+  <div class="card" data-col="1">
     <h2>Discovery &mdash; Anime</h2>
     <div id="sources-anime"></div>
   </div>
 
-  <div class="card">
-    <h2>Limits</h2>
-    <div class="optgrid" id="general"></div>
-  </div>
-
-  <div class="card">
+  <div class="card" data-col="2">
     <h2>Original language</h2>
     <p class="muted">
       Keep only these original languages (none = all). Applies where the
@@ -435,7 +430,12 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-col="2">
+    <h2>Limits</h2>
+    <div class="optgrid" id="general"></div>
+  </div>
+
+  <div class="card" data-col="2">
     <h2>Recently added</h2>
     <ul class="recent" id="recent"><li class="muted">Nothing yet.</li></ul>
   </div>
@@ -790,9 +790,27 @@ function layoutMasonry(force) {
   if (!force && n === lastColCount) return;
   lastColCount = n;
   const gap = 20;
-  // Measure each card at its real column width first (an element inside a
-  // detached column reports offsetHeight 0, which is why balancing used to
-  // fall back to round-robin). Stack them full-width but constrained to the
+
+  const cols = [];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement("div"); c.className = "col";
+    cols.push(c);
+  }
+
+  // At full width each card goes to its assigned column (data-col), giving a
+  // deliberate layout; DOM order is preserved within each column.
+  if (n === 3) {
+    cardEls.forEach(card => {
+      const col = Math.min(Number(card.dataset.col) || 0, n - 1);
+      cols[col].appendChild(card);
+    });
+    container.replaceChildren(...cols);
+    return;
+  }
+
+  // Narrower widths pack by height for balance. Measure each card at its real
+  // column width first (a detached column reports offsetHeight 0, which is why
+  // balancing used to fall back to round-robin): stack them constrained to the
   // target column width, read heights in one batch, then distribute.
   const colWidth = (container.clientWidth - (n - 1) * gap) / n;
   container.replaceChildren(...cardEls);
@@ -802,12 +820,7 @@ function layoutMasonry(force) {
   cardEls.forEach(c => { c.style.width = ""; });
   container.style.display = "";
 
-  const cols = [];
-  const heights = [];
-  for (let i = 0; i < n; i++) {
-    const c = document.createElement("div"); c.className = "col";
-    cols.push(c); heights.push(0);
-  }
+  const heights = cols.map(() => 0);
   // Tallest-first into the shortest column (longest-processing-time
   // scheduling) gives the most even columns. Status is pinned to the first
   // column so the summary stays top-left regardless.
