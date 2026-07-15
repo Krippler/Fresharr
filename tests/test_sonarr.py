@@ -104,6 +104,16 @@ def test_series_added_without_auto_search_by_default():
     assert payload["addOptions"]["searchForMissingEpisodes"] is False
 
 
+def test_series_already_in_library_via_lookup_id():
+    item = MediaItem(title="Sousou no Frieren", media_type=TV,
+                     source="rottentomatoes", year=2026)
+    # The lookup result carries a non-zero library id -> already added.
+    sonarr, session = make_sonarr({"Sousou no Frieren": [
+        {"title": "Sousou no Frieren", "year": 2026, "tvdbId": 424536, "id": 7}]})
+    assert sonarr.add(item) == state.EXISTS
+    assert session.posts == []
+
+
 def test_no_match_reports_not_found():
     item = MediaItem(title="Unknown Show", media_type=TV, source="s", year=2026)
     sonarr, _ = make_sonarr({"Unknown Show": []})

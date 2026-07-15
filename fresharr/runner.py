@@ -112,16 +112,14 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                  "in the web interface")
         log.error("%s", error)
 
-    # Connect to each *arr and load its library once, up front. A client that
-    # can't be reached or whose library won't load is taken out of service for
-    # this run and its items are deferred to the next run - rather than being
-    # retried once per candidate. Without this a single stalled Radarr/Sonarr
-    # turns one run into a long string of 60-second timeouts.
+    # Verify each *arr is reachable up front. One that can't be reached is
+    # taken out of service for this run and its items deferred to the next run.
+    # Duplicate detection uses each lookup result's library id, so there's no
+    # need to fetch the (potentially huge) library first.
     deferred: dict[str, str] = {}   # media_type -> reason its items were skipped
     for media_type, client in clients.items():
         try:
             client.check_connection()
-            client.load_library()
         except (ArrError, requests.RequestException) as exc:
             log.error("%s is not responding; deferring its items to the next "
                       "run: %s", client.app_name, exc)

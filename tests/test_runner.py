@@ -173,7 +173,7 @@ def test_stalled_arr_deferred_after_repeated_timeouts(tmp_path, monkeypatch):
     assert "stopped responding" in (summary["error"] or "")
 
 
-def test_arr_whose_library_wont_load_is_deferred(tmp_path, monkeypatch):
+def test_unreachable_arr_is_deferred(tmp_path, monkeypatch):
     monkeypatch.setattr("fresharr.runner.build_sources",
                         lambda cfg, s: [FakeSource(make_movies(4))])
 
@@ -184,9 +184,6 @@ def test_arr_whose_library_wont_load_is_deferred(tmp_path, monkeypatch):
             self.add_calls = 0
 
         def check_connection(self):
-            pass
-
-        def load_library(self):
             raise requests.ConnectionError("connection refused")
 
         def add(self, item, allowed_languages=()):  # pragma: no cover - never called

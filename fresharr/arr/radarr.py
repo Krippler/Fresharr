@@ -5,7 +5,6 @@ import requests
 from .. import state
 from ..config import Config
 from ..models import MediaItem
-from ..util import normalize_title
 from .base import (
     ArrClient,
     excluded_language,
@@ -27,29 +26,9 @@ class Radarr(ArrClient):
         self.monitored = config.radarr_monitored
         self.search_on_add = config.radarr_search_on_add
         self.minimum_availability = config.radarr_minimum_availability
-        self._tmdb_ids: set[int] | None = None
-        self._title_years: set[tuple[str, int | None]] | None = None
-
-    def load_library(self) -> None:
-        movies = self._get("movie")
-        self._tmdb_ids = {m["tmdbId"] for m in movies if m.get("tmdbId")}
-        self._title_years = {
-            (normalize_title(m.get("title", "")), m.get("year")) for m in movies
-        }
-        log.info("Radarr library: %d movies", len(movies))
-
-    def _in_library(self, item: MediaItem, tmdb_id: int | None) -> bool:
-        if self._tmdb_ids is None:
-            self.load_library()
-        if tmdb_id and tmdb_id in self._tmdb_ids:
-            return True
-        return (normalize_title(item.title), item.year) in self._title_years
 
     def add(self, item: MediaItem, allowed_languages: list[str] = ()) -> str:
         """Add a movie; returns a state status string."""
-        if self._in_library(item, item.tmdb_id):
-            return state.EXISTS
-
         match = None
         for term in lookup_terms(item):
             candidates = self._get("movie/lookup", term=term)
@@ -60,7 +39,9 @@ class Radarr(ArrClient):
         if not match:
             log.info("Radarr: no confident match for %s", item.describe())
             return state.NOT_FOUND
-        if self._in_library(item, match.get("tmdbId")):
+        # A lookup result already in the library carries its (non-zero) library
+        # id, so we detect duplicates without fetching the whole library.
+        if match.get("id"):
             return state.EXISTS
 
         excluded = excluded_language(match, allowed_languages)
@@ -83,11 +64,9 @@ class Radarr(ArrClient):
         try:
             added = self._post("movie", payload)
         except requests.HTTPError as exc:
-            if is_already_exists_error(exc):
+            if is_already_exists_error(exc):  # backstop if the id check missed it
                 return state.EXISTS
             raise
-        self._tmdb_ids.add(match.get("tmdbId") or 0)
-        self._title_years.add((normalize_title(match.get("title", "")), match.get("year")))
         log.info("Radarr: added %s (%s) [tmdb %s]",
                  added.get("title", item.title), added.get("year", item.year),
                  added.get("tmdbId"))

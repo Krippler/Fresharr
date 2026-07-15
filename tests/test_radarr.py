@@ -168,8 +168,10 @@ def test_add_passes_unknown_language():
 
 
 def test_add_skips_when_already_in_library():
+    # A lookup result already in the library carries a non-zero library id.
     radarr, session = make_radarr({
-        ("GET", "/movie"): [{"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134}],
+        ("GET", "/movie/lookup"): [{"title": "Dune: Part Two", "year": 2024,
+                                    "tmdbId": 693134, "id": 55}],
     })
     assert radarr.add(ITEM) == state.EXISTS
     assert session.posts == []
