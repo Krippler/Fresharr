@@ -16,7 +16,8 @@ class Radarr(ArrClient):
 
     def __init__(self, config: Config):
         super().__init__(config.radarr_url, config.radarr_api_key,
-                         config.radarr_quality_profile, config.radarr_root_folder)
+                         config.radarr_quality_profile, config.radarr_root_folder,
+                         config.radarr_tag)
         self.monitored = config.radarr_monitored
         self.search_on_add = config.radarr_search_on_add
         self.minimum_availability = config.radarr_minimum_availability
@@ -64,6 +65,9 @@ class Radarr(ArrClient):
             "minimumAvailability": self.minimum_availability,
             "addOptions": {"searchForMovie": self.search_on_add},
         })
+        tag_ids = self.resolve_tag_ids()
+        if tag_ids:
+            payload["tags"] = tag_ids
         try:
             added = self._post("movie", payload)
         except requests.HTTPError as exc:

@@ -16,7 +16,8 @@ class Sonarr(ArrClient):
 
     def __init__(self, config: Config):
         super().__init__(config.sonarr_url, config.sonarr_api_key,
-                         config.sonarr_quality_profile, config.sonarr_root_folder)
+                         config.sonarr_quality_profile, config.sonarr_root_folder,
+                         config.sonarr_tag)
         self.monitored = config.sonarr_monitored
         self.search_on_add = config.sonarr_search_on_add
         self._tvdb_ids: set[int] | None = None
@@ -82,6 +83,9 @@ class Sonarr(ArrClient):
         language_profile_id = self._language_profile()
         if language_profile_id is not None:
             payload["languageProfileId"] = language_profile_id
+        tag_ids = self.resolve_tag_ids()
+        if tag_ids:
+            payload["tags"] = tag_ids
         try:
             added = self._post("series", payload)
         except requests.HTTPError as exc:

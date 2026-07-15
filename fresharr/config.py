@@ -101,6 +101,7 @@ class Config:
     radarr_monitored: bool = True
     radarr_search_on_add: bool = True
     radarr_minimum_availability: str = "released"
+    radarr_tag: str = ""
 
     # Sonarr
     sonarr_url: str = ""
@@ -111,6 +112,7 @@ class Config:
     # Off by default: series are added but not auto-searched, so Sonarr
     # doesn't kick off downloads for every freshly discovered show.
     sonarr_search_on_add: bool = False
+    sonarr_tag: str = ""
 
     # Runtime behaviour
     dry_run: bool = False
@@ -179,12 +181,14 @@ class Config:
             radarr_monitored=_bool("RADARR_MONITORED", True),
             radarr_search_on_add=_bool("RADARR_SEARCH_ON_ADD", True),
             radarr_minimum_availability=_str("RADARR_MINIMUM_AVAILABILITY", "released"),
+            radarr_tag=_str("RADARR_TAG"),
             sonarr_url=_str("SONARR_URL"),
             sonarr_api_key=_str("SONARR_API_KEY"),
             sonarr_quality_profile=_str("SONARR_QUALITY_PROFILE"),
             sonarr_root_folder=_str("SONARR_ROOT_FOLDER"),
             sonarr_monitored=_bool("SONARR_MONITORED", True),
             sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", False),
+            sonarr_tag=_str("SONARR_TAG"),
             dry_run=_bool("DRY_RUN", False),
             run_once=_bool("RUN_ONCE", False),
             retry_not_found_days=_int("RETRY_NOT_FOUND_DAYS", 7),

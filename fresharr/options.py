@@ -40,6 +40,8 @@ OPTION_DEFS: list[OptionDef] = [
               "", select="profiles"),
     OptionDef("radarr_root_folder", "Root folder", RADARR, "str",
               "", select="root_folders"),
+    OptionDef("radarr_tag", "Tag added movies", RADARR, "str",
+              "Optional · applied to movies Fresharr adds (created if new)"),
     OptionDef("sonarr_url", "URL", SONARR, "str",
               "e.g. http://host:8989 · empty disables TV"),
     OptionDef("sonarr_api_key", "API key", SONARR, "secret",
@@ -48,6 +50,8 @@ OPTION_DEFS: list[OptionDef] = [
               "", select="profiles"),
     OptionDef("sonarr_root_folder", "Root folder", SONARR, "str",
               "", select="root_folders"),
+    OptionDef("sonarr_tag", "Tag added shows", SONARR, "str",
+              "Optional · applied to shows Fresharr adds (created if new)"),
     # General limits
     OptionDef("max_items_per_run", "Max additions per run", GENERAL, "int",
               "Cap per run", min=1, max=500),

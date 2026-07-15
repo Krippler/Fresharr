@@ -17,14 +17,16 @@ class ArrClient:
     app_name = "arr"
 
     def __init__(self, base_url: str, api_key: str,
-                 quality_profile: str = "", root_folder: str = ""):
+                 quality_profile: str = "", root_folder: str = "", tag: str = ""):
         self.base_url = base_url.rstrip("/")
         self.quality_profile = quality_profile
         self.root_folder = root_folder
+        self.tag = tag
         self.session = requests.Session()
         self.session.headers.update({"X-Api-Key": api_key})
         self._quality_profile_id: int | None = None
         self._root_folder_path: str | None = None
+        self._tag_ids: list[int] | None = None
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}/api/v3/{path.lstrip('/')}"
@@ -71,6 +73,30 @@ class ArrClient:
             log.info("%s: no quality profile configured, using %r",
                      self.app_name, profiles[0].get("name"))
         return self._quality_profile_id
+
+    def resolve_tag_ids(self) -> list[int]:
+        """Resolve the configured tag label(s) to Radarr/Sonarr tag ids,
+        creating any that don't exist yet. Comma-separated labels are
+        supported; an empty setting means no tags (and skips the API call)."""
+        if self._tag_ids is not None:
+            return self._tag_ids
+        labels = [part.strip() for part in self.tag.split(",") if part.strip()]
+        if not labels:
+            self._tag_ids = []
+            return self._tag_ids
+        existing = {t.get("label", "").lower(): t["id"] for t in self._get("tag")}
+        ids: list[int] = []
+        for label in labels:
+            tag_id = existing.get(label.lower())
+            if tag_id is None:
+                created = self._post("tag", {"label": label})
+                tag_id = created["id"]
+                existing[label.lower()] = tag_id
+                log.info("%s: created tag %r (id %s)", self.app_name, label, tag_id)
+            if tag_id not in ids:
+                ids.append(tag_id)
+        self._tag_ids = ids
+        return self._tag_ids
 
     def resolve_root_folder(self) -> str:
         if self._root_folder_path is not None:

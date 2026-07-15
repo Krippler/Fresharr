@@ -83,6 +83,52 @@ def test_add_posts_expected_payload():
     assert payload["addOptions"] == {"searchForMovie": True}
 
 
+def test_add_creates_and_applies_tag():
+    radarr, session = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): LOOKUP_RESULT,
+        ("GET", "/qualityprofile"): [{"id": 4, "name": "HD-1080p"}],
+        ("GET", "/rootfolder"): [{"path": "/movies"}],
+        ("GET", "/tag"): [{"id": 1, "label": "other"}],
+        ("POST", "/tag"): lambda payload: FakeResponse({"id": 7, "label": payload["label"]}),
+        ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
+    })
+    radarr.tag = "fresharr"          # not in the library's tag list -> created
+    assert radarr.add(ITEM) == state.ADDED
+    assert ("http://radarr:7878/api/v3/tag", {"label": "fresharr"}) in session.posts
+    movie_payload = next(p for (u, p) in session.posts if u.endswith("/movie"))
+    assert movie_payload["tags"] == [7]
+
+
+def test_add_reuses_existing_tag_case_insensitively():
+    radarr, session = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): LOOKUP_RESULT,
+        ("GET", "/qualityprofile"): [{"id": 4, "name": "HD-1080p"}],
+        ("GET", "/rootfolder"): [{"path": "/movies"}],
+        ("GET", "/tag"): [{"id": 3, "label": "Fresharr"}],
+        ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
+    })
+    radarr.tag = "fresharr"
+    assert radarr.add(ITEM) == state.ADDED
+    assert all(not u.endswith("/tag") for (u, _) in session.posts)  # no tag created
+    movie_payload = next(p for (u, p) in session.posts if u.endswith("/movie"))
+    assert movie_payload["tags"] == [3]
+
+
+def test_add_without_tag_sends_no_tags_key():
+    radarr, session = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): LOOKUP_RESULT,
+        ("GET", "/qualityprofile"): [{"id": 4, "name": "HD-1080p"}],
+        ("GET", "/rootfolder"): [{"path": "/movies"}],
+        ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
+    })
+    assert radarr.add(ITEM) == state.ADDED
+    (_, payload), = session.posts
+    assert "tags" not in payload   # no /tag call, unchanged payload
+
+
 def test_add_skips_when_already_in_library():
     radarr, session = make_radarr({
         ("GET", "/movie"): [{"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134}],
