@@ -232,6 +232,16 @@ INDEX_HTML = """<!doctype html>
           padding: 1rem 1.25rem; }
   h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
        color: #8b96a5; margin-bottom: .75rem; }
+  .ghostbtn { background: none; border: none; color: #6b7684; font-size: .78rem;
+              cursor: pointer; text-decoration: underline; padding: 0; }
+  .ghostbtn:hover { color: #9aa6b2; }
+  .drag-handle { display: none; cursor: grab; color: #556270; margin-right: .45rem;
+                 font-size: .85rem; line-height: 1; user-select: none;
+                 vertical-align: middle; }
+  .drag-handle:active { cursor: grabbing; }
+  #cards.dnd-on .drag-handle { display: inline-block; }
+  #cards.dnd-on .card { transition: outline-color .1s; }
+  .card.dragging { opacity: .45; outline: 2px dashed #3a8049; outline-offset: -2px; }
   .source { border-top: 1px solid #232b34; }
   .source:first-child { border-top: none; }
   .source-head { display: flex; align-items: center; gap: .7rem;
@@ -346,16 +356,17 @@ INDEX_HTML = """<!doctype html>
     <h1>Fresharr</h1>
     <span class="ver" id="version"></span>
     <span class="dry" id="dryrun" hidden>DRY RUN &mdash; nothing is sent to Radarr/Sonarr</span>
+    <button class="ghostbtn" id="resetlayout" hidden>Reset layout</button>
   </header>
 
   <div class="cards" id="cards" style="visibility:hidden">
-  <div class="card" data-col="0">
+  <div class="card" data-col="0" data-card="status">
     <h2>Status</h2>
     <div class="stat" id="status">Loading&hellip;</div>
     <p class="muted err" id="lasterror" hidden></p>
   </div>
 
-  <div class="card" data-col="0">
+  <div class="card" data-col="0" data-card="schedule">
     <h2>Schedule</h2>
     <div class="row">
       <label for="interval">Check for new titles</label>
@@ -375,7 +386,7 @@ INDEX_HTML = """<!doctype html>
     </p>
   </div>
 
-  <div class="card" data-col="0">
+  <div class="card" data-col="0" data-card="connections">
     <h2>Connections</h2>
     <div class="conn-row" data-conn="radarr">
       <div class="conn-head">
@@ -403,17 +414,17 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
 
-  <div class="card" data-col="1">
+  <div class="card" data-col="1" data-card="discovery-mediatv">
     <h2>Discovery &mdash; Movies &amp; TV</h2>
     <div id="sources-mediatv"></div>
   </div>
 
-  <div class="card" data-col="1">
+  <div class="card" data-col="1" data-card="discovery-anime">
     <h2>Discovery &mdash; Anime</h2>
     <div id="sources-anime"></div>
   </div>
 
-  <div class="card" data-col="2">
+  <div class="card" data-col="2" data-card="language">
     <h2>Original language</h2>
     <p class="muted">
       Keep only these original languages (none = all). Applies where the
@@ -430,12 +441,12 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
 
-  <div class="card" data-col="2">
+  <div class="card" data-col="2" data-card="limits">
     <h2>Limits</h2>
     <div class="optgrid" id="general"></div>
   </div>
 
-  <div class="card" data-col="2">
+  <div class="card" data-col="2" data-card="recent">
     <h2>Recently added</h2>
     <ul class="recent" id="recent"><li class="muted">Nothing yet.</li></ul>
   </div>
@@ -808,7 +819,129 @@ function layoutMasonry(force) {
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => layoutMasonry(false), 150);
+  resizeTimer = setTimeout(() => { layoutMasonry(false); updateDnd(); }, 150);
+});
+
+// ---- Adjustable card placement -------------------------------------------
+// The layout is three ordered lists of card ids (one per column). It is
+// stored per-browser in localStorage and applied over the default data-col
+// grouping. Drag-and-drop is offered only at the full 3-column width, where
+// the visible columns map one-to-one onto the stored columns.
+const LAYOUT_KEY = "fresharr.cardLayout";
+let draggedCard = null;
+let defaultCardLayout = null;   // pristine data-col grouping, captured before any drag
+
+function allCards() { return Array.from($("cards").querySelectorAll(".card")); }
+
+function defaultLayout() {
+  const L = [[], [], []];
+  allCards().forEach(c => L[Math.min(Number(c.dataset.col) || 0, 2)].push(c.dataset.card));
+  return L;
+}
+
+function loadLayout() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch (e) { saved = null; }
+  if (!Array.isArray(saved) || saved.length !== 3) return null;
+  const known = new Set(allCards().map(c => c.dataset.card));
+  const seen = new Set();
+  const L = [[], [], []];
+  saved.forEach((col, i) => (Array.isArray(col) ? col : []).forEach(id => {
+    if (known.has(id) && !seen.has(id)) { seen.add(id); L[i].push(id); }
+  }));
+  // Any card missing from the saved layout (e.g. a new card in an update)
+  // falls back to its default column so nothing disappears.
+  allCards().forEach(c => {
+    if (!seen.has(c.dataset.card)) L[Math.min(Number(c.dataset.col) || 0, 2)].push(c.dataset.card);
+  });
+  return L;
+}
+
+function applyLayout(L) {
+  const byId = new Map(allCards().map(c => [c.dataset.card, c]));
+  const ordered = [];
+  L.forEach((ids, col) => ids.forEach(id => {
+    const c = byId.get(id);
+    if (c) { c.dataset.col = col; ordered.push(c); }
+  }));
+  cardEls = ordered;
+  lastColCount = 0;          // force a rebuild with the new order
+  layoutMasonry(true);
+}
+
+function layoutFromDom() {
+  return Array.from($("cards").querySelectorAll(".col")).map(col =>
+    Array.from(col.querySelectorAll(".card")).map(c => c.dataset.card));
+}
+
+function updateDnd() {
+  const on = columnsForWidth() >= 3;
+  $("cards").classList.toggle("dnd-on", on);
+  document.querySelectorAll(".drag-handle").forEach(h =>
+    h.setAttribute("draggable", on ? "true" : "false"));
+  $("resetlayout").hidden = !(on && localStorage.getItem(LAYOUT_KEY));
+}
+
+function installDragHandles() {
+  allCards().forEach(card => {
+    const h2 = card.querySelector("h2");
+    if (h2 && !h2.querySelector(".drag-handle")) {
+      const handle = document.createElement("span");
+      handle.className = "drag-handle";
+      handle.innerHTML = "&#10303;";   // braille grip glyph (drag handle)
+      handle.title = "Drag to move this card";
+      h2.prepend(handle);
+    }
+  });
+}
+
+function cardAfterPoint(col, y) {
+  const cards = [...col.querySelectorAll(".card:not(.dragging)")];
+  let closest = null, closestOffset = -Infinity;
+  for (const card of cards) {
+    const box = card.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closestOffset) { closestOffset = offset; closest = card; }
+  }
+  return closest;
+}
+
+$("cards").addEventListener("dragstart", ev => {
+  const handle = ev.target.closest(".drag-handle");
+  if (!handle || handle.getAttribute("draggable") !== "true") { ev.preventDefault(); return; }
+  draggedCard = handle.closest(".card");
+  ev.dataTransfer.effectAllowed = "move";
+  ev.dataTransfer.setData("text/plain", draggedCard.dataset.card);
+  try { ev.dataTransfer.setDragImage(draggedCard, 24, 16); } catch (e) {}
+  requestAnimationFrame(() => draggedCard && draggedCard.classList.add("dragging"));
+});
+
+$("cards").addEventListener("dragover", ev => {
+  if (!draggedCard) return;
+  const col = ev.target.closest(".col");
+  if (!col) return;
+  ev.preventDefault();
+  const after = cardAfterPoint(col, ev.clientY);
+  if (after == null) col.appendChild(draggedCard);
+  else col.insertBefore(draggedCard, after);
+});
+
+$("cards").addEventListener("dragend", () => {
+  if (!draggedCard) return;
+  draggedCard.classList.remove("dragging");
+  draggedCard = null;
+  const L = layoutFromDom();
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(L));
+  applyLayout(L);
+  updateDnd();
+  toast("Layout saved");
+});
+
+$("resetlayout").addEventListener("click", () => {
+  localStorage.removeItem(LAYOUT_KEY);
+  applyLayout(defaultCardLayout || defaultLayout());
+  updateDnd();
+  toast("Layout reset");
 });
 
 $("interval").addEventListener("change", async ev => {
@@ -830,7 +963,11 @@ $("runnow").addEventListener("click", async () => {
 });
 
 refresh().then(() => {
-  layoutMasonry(true);
+  installDragHandles();
+  defaultCardLayout = defaultLayout();   // capture pristine defaults first
+  const saved = loadLayout();
+  if (saved) applyLayout(saved); else layoutMasonry(true);
+  updateDnd();
   $("cards").style.visibility = "";
   loadArrChoices("radarr"); loadArrChoices("sonarr");
 });
