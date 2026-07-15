@@ -154,7 +154,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                               f"the rest to the next run")
                     log.error("%s", reason)
                     deferred[item.media_type] = reason
-            state.record(item.key, status, item.title)
+            state.record(item.key, status, item.title, item.content_kind)
             counts[status] = counts.get(status, 0) + 1
             if status == state_mod.ADDED:
                 added_titles.append(item.title)

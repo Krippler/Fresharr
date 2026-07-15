@@ -95,6 +95,15 @@ def test_regular_show_uses_standard_series_type():
     assert payload["seriesType"] == "standard"
 
 
+def test_series_added_without_auto_search_by_default():
+    item = MediaItem(title="Sousou no Frieren", media_type=TV,
+                     source="rottentomatoes", year=2026)
+    sonarr, session = make_sonarr({"Sousou no Frieren": FRIEREN_MATCH})
+    sonarr.add(item)
+    (_, payload), = session.posts
+    assert payload["addOptions"]["searchForMissingEpisodes"] is False
+
+
 def test_no_match_reports_not_found():
     item = MediaItem(title="Unknown Show", media_type=TV, source="s", year=2026)
     sonarr, _ = make_sonarr({"Unknown Show": []})

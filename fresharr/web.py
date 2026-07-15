@@ -185,12 +185,20 @@ def _recent_additions(config: Config, limit: int = 15) -> list[dict]:
     from . import state as state_mod
     store = State(config.state_file)
     added = [
-        {"title": entry.get("title", key), "at": entry.get("at")}
+        {"title": entry.get("title", key), "at": entry.get("at"),
+         "kind": entry.get("kind") or _kind_from_key(key)}
         for key, entry in store.entries().items()
         if entry.get("status") == state_mod.ADDED
     ]
     added.sort(key=lambda e: e.get("at") or 0, reverse=True)
     return added[:limit]
+
+
+def _kind_from_key(key: str) -> str:
+    """Fallback content type for items recorded before kind was stored: the
+    state key is "<media_type>:<title>:<year>", so the prefix is movie or tv
+    (anime can't be recovered, so it shows as tv)."""
+    return "movie" if key.startswith("movie:") else "tv"
 
 
 # Flat, filter-free variant of unraid/icon.svg so it stays crisp as a favicon.
@@ -343,6 +351,12 @@ INDEX_HTML = """<!doctype html>
   ul.recent li { padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
   ul.recent li:first-child { border-top: none; }
   ul.recent .when { color: #6b7684; font-size: .78rem; float: right; }
+  .kind { display: inline-block; font-size: .66rem; text-transform: uppercase;
+          letter-spacing: .04em; padding: .05rem .4rem; border-radius: 99px;
+          margin-right: .45rem; vertical-align: middle; border: 1px solid transparent; }
+  .kind.movie { background: #24384f; color: #8ec5ff; border-color: #2f4d6b; }
+  .kind.tv { background: #2f2a4a; color: #b9a6ff; border-color: #443c6b; }
+  .kind.anime { background: #3d2a3a; color: #ff9ed6; border-color: #6b3c5a; }
   #toast { position: fixed; bottom: 1rem; right: 1rem; background: #2f6b3d;
            color: #eafff0; padding: .5rem .9rem; border-radius: 8px;
            opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -581,9 +595,13 @@ function render(o) {
   renderLanguages("langs-anime", "anime_languages", o);
 
   const recent = $("recent");
+  const kindLabel = {movie: "Movie", tv: "TV", anime: "Anime"};
   recent.innerHTML = (o.recent_additions && o.recent_additions.length)
-    ? o.recent_additions.map(r =>
-        `<li>${r.title}<span class="when">${fmtTime(r.at)}</span></li>`).join("")
+    ? o.recent_additions.map(r => {
+        const kind = kindLabel[r.kind] ? r.kind : "tv";
+        return `<li><span class="kind ${kind}">${kindLabel[kind]}</span>` +
+               `${escapeHtml(r.title)}<span class="when">${fmtTime(r.at)}</span></li>`;
+      }).join("")
     : '<li class="muted">Nothing yet.</li>';
 }
 

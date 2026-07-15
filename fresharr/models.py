@@ -30,6 +30,13 @@ class MediaItem:
     votes: int | None = None
 
     @property
+    def content_kind(self) -> str:
+        """Coarse content type for display: "anime", "movie" or "tv"."""
+        if self.anime:
+            return "anime"
+        return MOVIE if self.media_type == MOVIE else TV
+
+    @property
     def key(self) -> str:
         """Stable identity used for cross-source dedupe and the seen-state file.
 

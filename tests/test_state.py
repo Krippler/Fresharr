@@ -46,3 +46,14 @@ def test_save_creates_parent_dirs(tmp_path):
     state.record("k", state_mod.ADDED, "T")
     state.save()
     assert json.loads(path.read_text())["items"]["k"]["status"] == state_mod.ADDED
+
+
+def test_record_stores_content_kind(tmp_path):
+    path = tmp_path / "state.json"
+    state = State(str(path))
+    state.record("tv:naruto:2026", state_mod.ADDED, "Naruto", "anime")
+    state.record("movie:dune:2024", state_mod.ADDED, "Dune")  # kind optional
+    state.save()
+    items = json.loads(path.read_text())["items"]
+    assert items["tv:naruto:2026"]["kind"] == "anime"
+    assert "kind" not in items["movie:dune:2024"]

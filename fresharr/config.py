@@ -105,7 +105,9 @@ class Config:
     sonarr_quality_profile: str = ""
     sonarr_root_folder: str = ""
     sonarr_monitored: bool = True
-    sonarr_search_on_add: bool = True
+    # Off by default: series are added but not auto-searched, so Sonarr
+    # doesn't kick off downloads for every freshly discovered show.
+    sonarr_search_on_add: bool = False
 
     # Runtime behaviour
     dry_run: bool = False
@@ -171,7 +173,7 @@ class Config:
             sonarr_quality_profile=_str("SONARR_QUALITY_PROFILE"),
             sonarr_root_folder=_str("SONARR_ROOT_FOLDER"),
             sonarr_monitored=_bool("SONARR_MONITORED", True),
-            sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", True),
+            sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", False),
             dry_run=_bool("DRY_RUN", False),
             run_once=_bool("RUN_ONCE", False),
             retry_not_found_days=_int("RETRY_NOT_FOUND_DAYS", 7),

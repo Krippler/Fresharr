@@ -47,8 +47,11 @@ class State:
                 os.unlink(tmp_path)
             raise
 
-    def record(self, key: str, status: str, title: str) -> None:
-        self._items[key] = {"status": status, "title": title, "at": int(time.time())}
+    def record(self, key: str, status: str, title: str, kind: str | None = None) -> None:
+        entry = {"status": status, "title": title, "at": int(time.time())}
+        if kind:
+            entry["kind"] = kind
+        self._items[key] = entry
 
     def should_skip(self, key: str) -> bool:
         entry = self._items.get(key)
