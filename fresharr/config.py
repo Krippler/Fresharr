@@ -101,6 +101,7 @@ class Config:
     radarr_api_key: str = ""
     radarr_quality_profile: str = ""
     radarr_root_folder: str = ""
+    radarr_anime_root_folder: str = ""  # empty = use the main root folder
     radarr_monitored: bool = True
     radarr_search_on_add: bool = True
     radarr_minimum_availability: str = "released"
@@ -111,6 +112,7 @@ class Config:
     sonarr_api_key: str = ""
     sonarr_quality_profile: str = ""
     sonarr_root_folder: str = ""
+    sonarr_anime_root_folder: str = ""  # empty = use the main root folder
     sonarr_monitored: bool = True
     # Off by default: series are added but not auto-searched, so Sonarr
     # doesn't kick off downloads for every freshly discovered show.
@@ -186,6 +188,7 @@ class Config:
             radarr_api_key=_str("RADARR_API_KEY"),
             radarr_quality_profile=_str("RADARR_QUALITY_PROFILE"),
             radarr_root_folder=_str("RADARR_ROOT_FOLDER"),
+            radarr_anime_root_folder=_str("RADARR_ANIME_ROOT_FOLDER"),
             radarr_monitored=_bool("RADARR_MONITORED", True),
             radarr_search_on_add=_bool("RADARR_SEARCH_ON_ADD", True),
             radarr_minimum_availability=_str("RADARR_MINIMUM_AVAILABILITY", "released"),
@@ -194,6 +197,7 @@ class Config:
             sonarr_api_key=_str("SONARR_API_KEY"),
             sonarr_quality_profile=_str("SONARR_QUALITY_PROFILE"),
             sonarr_root_folder=_str("SONARR_ROOT_FOLDER"),
+            sonarr_anime_root_folder=_str("SONARR_ANIME_ROOT_FOLDER"),
             sonarr_monitored=_bool("SONARR_MONITORED", True),
             sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", False),
             sonarr_tag=_str("SONARR_TAG"),

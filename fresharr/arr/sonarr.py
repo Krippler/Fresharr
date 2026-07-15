@@ -22,7 +22,8 @@ class Sonarr(ArrClient):
     def __init__(self, config: Config):
         super().__init__(config.sonarr_url, config.sonarr_api_key,
                          config.sonarr_quality_profile, config.sonarr_root_folder,
-                         config.sonarr_tag, config.arr_timeout)
+                         config.sonarr_anime_root_folder, config.sonarr_tag,
+                         config.arr_timeout)
         self.monitored = config.sonarr_monitored
         self.search_on_add = config.sonarr_search_on_add
         self._language_profile_id: int | None = None
@@ -67,7 +68,7 @@ class Sonarr(ArrClient):
         payload = dict(match)
         payload.update({
             "qualityProfileId": self.resolve_quality_profile_id(),
-            "rootFolderPath": self.resolve_root_folder(),
+            "rootFolderPath": self.resolve_root_folder(item.anime),
             "monitored": self.monitored,
             "seasonFolder": True,
             "seriesType": "anime" if item.anime else "standard",

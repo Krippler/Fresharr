@@ -17,17 +17,19 @@ class ArrClient:
     app_name = "arr"
 
     def __init__(self, base_url: str, api_key: str,
-                 quality_profile: str = "", root_folder: str = "", tag: str = "",
-                 timeout: int = 300):
+                 quality_profile: str = "", root_folder: str = "",
+                 anime_root_folder: str = "", tag: str = "", timeout: int = 300):
         self.base_url = base_url.rstrip("/")
         self.quality_profile = quality_profile
         self.root_folder = root_folder
+        self.anime_root_folder = anime_root_folder
         self.tag = tag
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({"X-Api-Key": api_key})
         self._quality_profile_id: int | None = None
-        self._root_folder_path: str | None = None
+        self._root_folders: list[dict] | None = None
+        self._root_folder_cache: dict[str, str] = {}  # wanted path -> resolved
         self._tag_ids: list[int] | None = None
 
     def _url(self, path: str) -> str:
@@ -103,17 +105,23 @@ class ArrClient:
         self._tag_ids = ids
         return self._tag_ids
 
-    def resolve_root_folder(self) -> str:
-        if self._root_folder_path is not None:
-            return self._root_folder_path
-        folders = self._get("rootfolder")
+    def resolve_root_folder(self, anime: bool = False) -> str:
+        """Resolve the root folder path to add into. Anime uses the dedicated
+        anime root folder when one is configured; otherwise the main folder
+        (empty = the *arr's first configured folder)."""
+        wanted = self.anime_root_folder if (anime and self.anime_root_folder) \
+            else self.root_folder
+        if wanted in self._root_folder_cache:
+            return self._root_folder_cache[wanted]
+        if self._root_folders is None:
+            self._root_folders = self._get("rootfolder")
+        folders = self._root_folders
         if not folders:
             raise ArrError(f"{self.app_name} has no root folders configured")
-        wanted = self.root_folder
         if wanted:
             for folder in folders:
                 if folder.get("path", "").rstrip("/") == wanted.rstrip("/"):
-                    self._root_folder_path = folder["path"]
+                    path = folder["path"]
                     break
             else:
                 paths = ", ".join(f.get("path", "?") for f in folders)
@@ -121,10 +129,10 @@ class ArrClient:
                     f"{self.app_name} root folder {wanted!r} not found "
                     f"(available: {paths})")
         else:
-            self._root_folder_path = folders[0]["path"]
-            log.info("%s: no root folder configured, using %r",
-                     self.app_name, folders[0].get("path"))
-        return self._root_folder_path
+            path = folders[0]["path"]
+            log.info("%s: no root folder configured, using %r", self.app_name, path)
+        self._root_folder_cache[wanted] = path
+        return path
 
 
 # Radarr/Sonarr report a match's original language by its English name; map

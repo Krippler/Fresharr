@@ -45,7 +45,7 @@ class FakeSession:
         if path.endswith("/qualityprofile"):
             return FakeResponse([{"id": 2, "name": "HD-1080p"}])
         if path.endswith("/rootfolder"):
-            return FakeResponse([{"path": "/tv"}])
+            return FakeResponse([{"path": "/tv"}, {"path": "/tv/Anime"}])
         if path.endswith("/languageprofile"):
             return FakeResponse([], status=404)
         raise AssertionError(f"Unexpected GET {url}")
@@ -55,9 +55,11 @@ class FakeSession:
         return FakeResponse(dict(json or {}, id=1))
 
 
-def make_sonarr(lookups) -> tuple[Sonarr, FakeSession]:
+def make_sonarr(lookups, **overrides) -> tuple[Sonarr, FakeSession]:
     cfg = Config(sonarr_url="http://sonarr:8989", sonarr_api_key="k",
                  radarr_url="", radarr_api_key="")
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
     sonarr = Sonarr(cfg)
     session = FakeSession(lookups)
     sonarr.session = session
@@ -84,6 +86,35 @@ def test_anime_added_with_anime_series_type():
     assert payload["seriesType"] == "anime"
     assert payload["tvdbId"] == 424536
     assert payload["seasonFolder"] is True
+
+
+def test_anime_uses_dedicated_root_folder():
+    item = MediaItem(title="Sousou no Frieren", media_type=TV, source="anilist",
+                     year=2026, anime=True)
+    sonarr, session = make_sonarr({"Sousou no Frieren": FRIEREN_MATCH},
+                                  sonarr_anime_root_folder="/tv/Anime")
+    assert sonarr.add(item) == state.ADDED
+    (_, payload), = session.posts
+    assert payload["rootFolderPath"] == "/tv/Anime"
+
+
+def test_non_anime_uses_main_root_folder_even_with_anime_folder_set():
+    item = MediaItem(title="Sousou no Frieren", media_type=TV,
+                     source="rottentomatoes", year=2026)  # not anime
+    sonarr, session = make_sonarr({"Sousou no Frieren": FRIEREN_MATCH},
+                                  sonarr_anime_root_folder="/tv/Anime")
+    assert sonarr.add(item) == state.ADDED
+    (_, payload), = session.posts
+    assert payload["rootFolderPath"] == "/tv"   # main folder, not anime
+
+
+def test_anime_falls_back_to_main_folder_when_unset():
+    item = MediaItem(title="Sousou no Frieren", media_type=TV, source="anilist",
+                     year=2026, anime=True)
+    sonarr, session = make_sonarr({"Sousou no Frieren": FRIEREN_MATCH})  # no anime folder
+    assert sonarr.add(item) == state.ADDED
+    (_, payload), = session.posts
+    assert payload["rootFolderPath"] == "/tv"
 
 
 def test_regular_show_uses_standard_series_type():
