@@ -301,14 +301,28 @@ INDEX_HTML = """<!doctype html>
   .srcopts { margin-top: .4rem; }
   .srcopts .desc { margin-bottom: .5rem; }
   .srcopts .optgrid { margin-top: .2rem; }
-  .langgroup { margin-top: .6rem; }
+  .langgroup { display: flex; align-items: center; gap: .6rem; margin-top: .55rem; }
   .langgroup .k { color: #8b96a5; font-size: .75rem; text-transform: uppercase;
-                  letter-spacing: .06em; display: block; margin-bottom: .4rem; }
-  .langs { display: flex; flex-wrap: wrap; gap: .4rem; }
-  .lang { border: 1px solid #333d49; border-radius: 99px; padding: .25rem .75rem;
-          cursor: pointer; font-size: .85rem; color: #8b96a5; user-select: none; }
-  .lang.on { background: #2f6b3d; border-color: #3a8049; color: #eafff0; }
-  .lang input { display: none; }
+                  letter-spacing: .06em; flex: 0 0 4.5rem; }
+  .dropdown { position: relative; flex: 1 1 auto; min-width: 0; }
+  .dd-trigger { width: 100%; display: flex; align-items: center; justify-content: space-between;
+                gap: .5rem; border: 1px solid #333d49; border-radius: 8px; background: #161c24;
+                color: #d7dee6; padding: .4rem .65rem; font-size: .85rem; cursor: pointer;
+                text-align: left; }
+  .dd-trigger:hover { border-color: #3a8049; }
+  .dd-trigger .cur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-trigger .cur.none { color: #6b7684; }
+  .dd-trigger .caret { flex: 0 0 auto; color: #6b7684; font-size: .7rem; }
+  .dropdown.open .dd-trigger { border-color: #3a8049; }
+  .dd-panel { display: none; position: absolute; z-index: 20; top: calc(100% + 4px); left: 0;
+              right: 0; max-height: 15rem; overflow-y: auto; background: #1a212b;
+              border: 1px solid #333d49; border-radius: 8px; padding: .3rem;
+              box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .dropdown.open .dd-panel { display: block; }
+  .dd-opt { display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem;
+            border-radius: 6px; cursor: pointer; font-size: .85rem; color: #c3ccd6; }
+  .dd-opt:hover { background: #232b34; }
+  .dd-opt input { accent-color: #2f6b3d; }
   ul.recent { list-style: none; }
   ul.recent li { padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
   ul.recent li:first-child { border-top: none; }
@@ -391,13 +405,13 @@ INDEX_HTML = """<!doctype html>
       source reports language; unknown always passes.
     </p>
     <div class="langgroup"><span class="k">Movies</span>
-      <div class="langs" id="langs-movie"></div>
+      <div class="dropdown" id="langs-movie"></div>
     </div>
     <div class="langgroup"><span class="k">TV shows</span>
-      <div class="langs" id="langs-tv"></div>
+      <div class="dropdown" id="langs-tv"></div>
     </div>
     <div class="langgroup"><span class="k">Anime</span>
-      <div class="langs" id="langs-anime"></div>
+      <div class="dropdown" id="langs-anime"></div>
     </div>
   </div>
 
@@ -539,7 +553,16 @@ function escapeHtml(value) {
 
 const arrChoices = {radarr: null, sonarr: null};
 const expandedSources = new Set();  // sites whose settings are shown (persists across re-renders)
+const openLangs = new Set();  // language dropdowns currently open (persists across re-renders)
 let lastOverview = null;
+
+// Close any open language dropdown when clicking outside it.
+document.addEventListener("click", ev => {
+  if (!openLangs.size) return;
+  if (ev.target.closest(".dropdown")) return;
+  openLangs.clear();
+  document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
+});
 
 function optionInput(opt) {
   // Quality profile / root folder are dropdowns fed by the connected app's
@@ -660,22 +683,50 @@ function renderConnState(app, configured) {
   }
 }
 
+function langSummary(options, selected) {
+  const labels = options.filter(l => selected.has(l.code)).map(l => l.label);
+  return labels.length ? labels.join(", ") : "All languages";
+}
+
 function renderLanguages(elementId, settingKey, o) {
+  const options = o.language_options;
   const selected = new Set(o.settings[settingKey] || []);
   const container = $(elementId);
-  container.innerHTML = o.language_options.map(l => `
-    <label class="lang ${selected.has(l.code) ? "on" : ""}">
-      <input type="checkbox" value="${l.code}" ${selected.has(l.code) ? "checked" : ""}>
-      ${l.label}
-    </label>`).join("");
-  container.querySelectorAll("input").forEach(box => {
+  const isOpen = openLangs.has(settingKey);
+  container.classList.toggle("open", isOpen);
+  const summary = langSummary(options, selected);
+  container.innerHTML = `
+    <button type="button" class="dd-trigger">
+      <span class="cur ${selected.size ? "" : "none"}">${escapeHtml(summary)}</span>
+      <span class="caret">▾</span>
+    </button>
+    <div class="dd-panel">
+      ${options.map(l => `
+        <label class="dd-opt">
+          <input type="checkbox" value="${l.code}" ${selected.has(l.code) ? "checked" : ""}>
+          ${escapeHtml(l.label)}
+        </label>`).join("")}
+    </div>`;
+
+  container.querySelector(".dd-trigger").addEventListener("click", () => {
+    const nowOpen = !openLangs.has(settingKey);
+    openLangs.clear();  // only one language dropdown open at a time
+    if (nowOpen) openLangs.add(settingKey);
+    document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
+    container.classList.toggle("open", nowOpen);
+  });
+
+  const cur = container.querySelector(".cur");
+  container.querySelectorAll(".dd-panel input").forEach(box => {
     box.addEventListener("change", async () => {
-      const codes = [...container.querySelectorAll("input:checked")].map(b => b.value);
+      const codes = [...container.querySelectorAll(".dd-panel input:checked")].map(b => b.value);
       try {
         await api("/api/settings", {method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({[settingKey]: codes})});
-        box.closest(".lang").classList.toggle("on", box.checked);
+        selected.clear(); codes.forEach(c => selected.add(c));
+        cur.textContent = langSummary(options, selected);
+        cur.classList.toggle("none", codes.length === 0);
         toast(codes.length ? "Languages: " + codes.join(", ") : "All languages");
       } catch (e) { toast(e.message, true); box.checked = !box.checked; }
     });
@@ -683,9 +734,11 @@ function renderLanguages(elementId, settingKey, o) {
 }
 
 async function refresh() {
-  // Don't re-render while the user is typing in a settings field
+  // Don't re-render while the user is typing in a settings field or has a
+  // language dropdown open (a rebuild would close it mid-selection).
   const active = document.activeElement;
   if (active && active.dataset && active.dataset.opt) return;
+  if (openLangs.size) return;
   try { render(await api("/api/overview")); }
   catch (e) { toast("Failed to load: " + e.message, true); }
 }
