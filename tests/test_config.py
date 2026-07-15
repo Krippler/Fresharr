@@ -32,6 +32,7 @@ def test_minimal_radarr_config(monkeypatch):
     assert cfg.web_port == 8383
     assert cfg.state_file == "/config/state.json"
     assert cfg.settings_file == "/config/settings.json"
+    assert cfg.arr_timeout == 300           # generous default for big libraries
 
 
 def test_bool_and_list_parsing(monkeypatch):

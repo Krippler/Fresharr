@@ -17,7 +17,7 @@ class Radarr(ArrClient):
     def __init__(self, config: Config):
         super().__init__(config.radarr_url, config.radarr_api_key,
                          config.radarr_quality_profile, config.radarr_root_folder,
-                         config.radarr_tag)
+                         config.radarr_tag, config.arr_timeout)
         self.monitored = config.radarr_monitored
         self.search_on_add = config.radarr_search_on_add
         self.minimum_availability = config.radarr_minimum_availability

@@ -17,11 +17,13 @@ class ArrClient:
     app_name = "arr"
 
     def __init__(self, base_url: str, api_key: str,
-                 quality_profile: str = "", root_folder: str = "", tag: str = ""):
+                 quality_profile: str = "", root_folder: str = "", tag: str = "",
+                 timeout: int = 300):
         self.base_url = base_url.rstrip("/")
         self.quality_profile = quality_profile
         self.root_folder = root_folder
         self.tag = tag
+        self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({"X-Api-Key": api_key})
         self._quality_profile_id: int | None = None
@@ -31,19 +33,22 @@ class ArrClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url}/api/v3/{path.lstrip('/')}"
 
-    def _get(self, path: str, *, timeout: int = 60, **params):
-        resp = self.session.get(self._url(path), params=params, timeout=timeout)
+    def _get(self, path: str, *, timeout: int | None = None, **params):
+        resp = self.session.get(self._url(path), params=params,
+                                timeout=timeout or self.timeout)
         resp.raise_for_status()
         return resp.json()
 
     def _post(self, path: str, payload: dict):
-        resp = self.session.post(self._url(path), json=payload, timeout=60)
+        resp = self.session.post(self._url(path), json=payload, timeout=self.timeout)
         resp.raise_for_status()
         return resp.json()
 
     def check_connection(self) -> None:
+        # A short timeout here: system/status is tiny, so an unreachable app
+        # should fail fast rather than wait out the long library/add timeout.
         try:
-            status = self._get("system/status")
+            status = self._get("system/status", timeout=min(self.timeout, 30))
         except requests.RequestException as exc:
             raise ArrError(f"Cannot reach {self.app_name} at {self.base_url}: {exc}") from exc
         log.info("Connected to %s %s at %s",

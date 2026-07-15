@@ -57,6 +57,8 @@ OPTION_DEFS: list[OptionDef] = [
               "Cap per run", min=1, max=500),
     OptionDef("min_year", "Minimum release year", GENERAL, "int",
               "0 = no limit", min=0, max=2100),
+    OptionDef("arr_timeout", "Radarr/Sonarr timeout (s)", GENERAL, "int",
+              "Time to allow large libraries to respond", min=30, max=1800),
     # Per-site thresholds and keys
     OptionDef("rt_min_critics_score", "Min critics score", "rottentomatoes", "int",
               "0-100", min=0, max=100),

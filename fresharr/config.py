@@ -114,6 +114,10 @@ class Config:
     sonarr_search_on_add: bool = False
     sonarr_tag: str = ""
 
+    # HTTP timeout (seconds) for Radarr/Sonarr library reads and adds. Large
+    # libraries and metadata refreshes can take a while, so this is generous.
+    arr_timeout: int = 300
+
     # Runtime behaviour
     dry_run: bool = False
     run_once: bool = False
@@ -189,6 +193,7 @@ class Config:
             sonarr_monitored=_bool("SONARR_MONITORED", True),
             sonarr_search_on_add=_bool("SONARR_SEARCH_ON_ADD", False),
             sonarr_tag=_str("SONARR_TAG"),
+            arr_timeout=_int("ARR_TIMEOUT", 300),
             dry_run=_bool("DRY_RUN", False),
             run_once=_bool("RUN_ONCE", False),
             retry_not_found_days=_int("RETRY_NOT_FOUND_DAYS", 7),
