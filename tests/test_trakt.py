@@ -82,3 +82,32 @@ def test_api_error_degrades_gracefully(monkeypatch):
 
     monkeypatch.setattr(source.session, "get", fake_get)
     assert source.fetch() == []
+
+
+def test_sends_named_user_agent():
+    # A named User-Agent is what gets past Cloudflare in front of the API.
+    source = make_source()
+    assert source.session.headers["User-Agent"].startswith("Fresharr/")
+    assert source.session.headers["trakt-api-key"] == "cid"
+
+
+def test_forbidden_gives_client_id_hint(monkeypatch, caplog):
+    import requests
+    source = make_source()
+
+    class Forbidden:
+        status_code = 403
+
+        def raise_for_status(self):
+            err = requests.HTTPError("403 Client Error: Forbidden")
+            err.response = self
+            raise err
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(source.session, "get",
+                        lambda url, params=None, timeout=None: Forbidden())
+    with caplog.at_level("WARNING"):
+        assert source.fetch() == []
+    assert any("Client ID" in r.message for r in caplog.records)

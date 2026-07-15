@@ -11,12 +11,18 @@ import logging
 
 import requests
 
+from .. import __version__
 from ..config import Config
 from ..models import MOVIE, TV, MediaItem
 
 log = logging.getLogger(__name__)
 
 API_BASE = "https://api.trakt.tv"
+
+# Trakt's API sits behind Cloudflare, which 403s the default
+# "python-requests/x.y" User-Agent even when the API key is valid. A named
+# User-Agent (Trakt asks clients to identify themselves anyway) gets past it.
+USER_AGENT = f"Fresharr/{__version__} (+https://github.com/krippler/fresharr)"
 
 
 class TraktSource:
@@ -28,6 +34,7 @@ class TraktSource:
         self.limit = config.trakt_limit
         self.session = requests.Session()
         self.session.headers.update({
+            "User-Agent": USER_AGENT,
             "Content-Type": "application/json",
             "trakt-api-version": "2",
             "trakt-api-key": config.trakt_client_id,
@@ -49,6 +56,19 @@ class TraktSource:
             )
             resp.raise_for_status()
             data = resp.json()
+        except requests.HTTPError as exc:
+            code = exc.response.status_code if exc.response is not None else None
+            if code == 403:
+                log.warning("Trakt %s/trending returned 403 Forbidden - the "
+                            "Client ID looks wrong. Paste your app's *Client ID* "
+                            "(not the Client Secret) from "
+                            "trakt.tv/oauth/applications.", endpoint)
+            elif code == 429:
+                log.warning("Trakt %s/trending rate-limited (429); it will "
+                            "recover on the next run.", endpoint)
+            else:
+                log.warning("Trakt %s/trending failed: %s", endpoint, exc)
+            return []
         except (requests.RequestException, ValueError) as exc:
             log.warning("Trakt %s/trending failed: %s", endpoint, exc)
             return []
