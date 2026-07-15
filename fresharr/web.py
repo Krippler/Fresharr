@@ -780,7 +780,7 @@ let cardEls = null;
 let lastColCount = 0;
 function columnsForWidth() {
   const w = window.innerWidth;
-  return w >= 1800 ? 4 : w >= 1200 ? 3 : w >= 720 ? 2 : 1;
+  return w >= 1200 ? 3 : w >= 720 ? 2 : 1;
 }
 function layoutMasonry(force) {
   const container = $("cards");
