@@ -161,3 +161,39 @@ def test_option_validation(tmp_path):
         store.update({"options": {"max_items_per_run": 0}})
     with pytest.raises(SettingsError, match="must be a number"):
         store.update({"options": {"metacritic_min_score": "high"}})
+
+
+def test_card_layout_roundtrip_per_width(tmp_path):
+    store = make_store(tmp_path)
+    store.update({"card_layout": {
+        "3": [["status"], ["schedule"], ["connections"]],
+        "2": [["status", "schedule"], ["connections"]],
+    }})
+    reloaded = make_store(tmp_path)
+    layout = reloaded.card_layout
+    assert layout["3"] == [["status"], ["schedule"], ["connections"]]
+    assert layout["2"] == [["status", "schedule"], ["connections"]]
+    assert "1" not in layout  # widths never customised stay absent
+
+    # A width can be reset independently by sending null
+    store.update({"card_layout": {"2": None}})
+    layout = make_store(tmp_path).card_layout
+    assert "2" not in layout
+    assert "3" in layout
+
+
+def test_card_layout_sanitises_and_validates(tmp_path):
+    store = make_store(tmp_path)
+    # Duplicate ids are dropped, keeping the first occurrence
+    store.update({"card_layout": {"2": [["status", "status", "schedule"], ["status"]]}})
+    assert store.card_layout["2"] == [["status", "schedule"], []]
+
+    # Wrong column count for the key is rejected
+    with pytest.raises(SettingsError, match="column"):
+        store.update({"card_layout": {"3": [["status"], ["schedule"]]}})
+    # Unknown width key is rejected
+    with pytest.raises(SettingsError, match="1, 2 or 3"):
+        store.update({"card_layout": {"4": [["a"], ["b"], ["c"], ["d"]]}})
+    # Malformed id shape is rejected
+    with pytest.raises(SettingsError, match="column"):
+        store.update({"card_layout": {"1": ["not-a-column-list"]}})

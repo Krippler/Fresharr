@@ -787,7 +787,6 @@ async function refresh() {
 // Masonry layout: distribute the section cards into N independent columns
 // (N by window width). Re-runs only when the column count changes, so
 // expanding/collapsing a card never reshuffles the others.
-let cardEls = null;
 let lastColCount = 0;
 function columnsForWidth() {
   const w = window.innerWidth;
@@ -796,23 +795,14 @@ function columnsForWidth() {
 function layoutMasonry(force) {
   const container = $("cards");
   if (!container) return;
-  if (!cardEls) cardEls = Array.from(container.querySelectorAll(".card"));
   const n = columnsForWidth();
   if (!force && n === lastColCount) return;
   lastColCount = n;
-  const cols = [];
-  for (let i = 0; i < n; i++) {
-    const c = document.createElement("div"); c.className = "col";
-    cols.push(c);
-  }
-
-  // Every card keeps its assigned column group (data-col). With fewer
-  // columns than groups, trailing groups fold into the last column, so the
-  // card order and each column's starting card stay identical across the
-  // 3-, 2- and 1-column layouts.
-  cardEls.forEach(card => {
-    const col = Math.min(Number(card.dataset.col) || 0, n - 1);
-    cols[col].appendChild(card);
+  const byId = new Map(allCards().map(c => [c.dataset.card, c]));
+  const cols = activeLayoutFor(n).map(ids => {
+    const col = document.createElement("div"); col.className = "col";
+    ids.forEach(id => { const c = byId.get(id); if (c) col.appendChild(c); });
+    return col;
   });
   container.replaceChildren(...cols);
 }
@@ -823,50 +813,44 @@ window.addEventListener("resize", () => {
 });
 
 // ---- Adjustable card placement -------------------------------------------
-// The layout is three ordered lists of card ids (one per column). It is
-// stored per-browser in localStorage and applied over the default data-col
-// grouping. Drag-and-drop is offered only at the full 3-column width, where
-// the visible columns map one-to-one onto the stored columns.
-const LAYOUT_KEY = "fresharr.cardLayout";
+// Card arrangement is saved on the server (settings.card_layout), keyed by
+// column count, so the 3-, 2- and 1-column views each keep their own layout
+// and every device shares it. Only widths the user has customised are
+// stored; the rest fall back to the default column grouping (data-col, with
+// trailing groups folded into the last column).
+let savedLayouts = {};
 let draggedCard = null;
-let defaultCardLayout = null;   // pristine data-col grouping, captured before any drag
 
 function allCards() { return Array.from($("cards").querySelectorAll(".card")); }
 
-function defaultLayout() {
-  const L = [[], [], []];
-  allCards().forEach(c => L[Math.min(Number(c.dataset.col) || 0, 2)].push(c.dataset.card));
-  return L;
+function defaultLayoutFor(n) {
+  const cols = Array.from({length: n}, () => []);
+  allCards().forEach(c =>
+    cols[Math.min(Number(c.dataset.col) || 0, n - 1)].push(c.dataset.card));
+  return cols;
 }
 
-function loadLayout() {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch (e) { saved = null; }
-  if (!Array.isArray(saved) || saved.length !== 3) return null;
-  const known = new Set(allCards().map(c => c.dataset.card));
+// Turn a stored layout into a usable one for n columns: keep only known card
+// ids (deduplicated) and append any card missing from it to its default
+// column so nothing disappears. Returns null if the stored shape is wrong.
+function reconcile(layout, n) {
+  if (!Array.isArray(layout) || layout.length !== n) return null;
+  const cards = allCards();
+  const known = new Set(cards.map(c => c.dataset.card));
   const seen = new Set();
-  const L = [[], [], []];
-  saved.forEach((col, i) => (Array.isArray(col) ? col : []).forEach(id => {
-    if (known.has(id) && !seen.has(id)) { seen.add(id); L[i].push(id); }
+  const cols = Array.from({length: n}, () => []);
+  layout.forEach((col, i) => (Array.isArray(col) ? col : []).forEach(id => {
+    if (known.has(id) && !seen.has(id)) { seen.add(id); cols[i].push(id); }
   }));
-  // Any card missing from the saved layout (e.g. a new card in an update)
-  // falls back to its default column so nothing disappears.
-  allCards().forEach(c => {
-    if (!seen.has(c.dataset.card)) L[Math.min(Number(c.dataset.col) || 0, 2)].push(c.dataset.card);
+  cards.forEach(c => {
+    if (!seen.has(c.dataset.card))
+      cols[Math.min(Number(c.dataset.col) || 0, n - 1)].push(c.dataset.card);
   });
-  return L;
+  return cols;
 }
 
-function applyLayout(L) {
-  const byId = new Map(allCards().map(c => [c.dataset.card, c]));
-  const ordered = [];
-  L.forEach((ids, col) => ids.forEach(id => {
-    const c = byId.get(id);
-    if (c) { c.dataset.col = col; ordered.push(c); }
-  }));
-  cardEls = ordered;
-  lastColCount = 0;          // force a rebuild with the new order
-  layoutMasonry(true);
+function activeLayoutFor(n) {
+  return reconcile(savedLayouts[String(n)], n) || defaultLayoutFor(n);
 }
 
 function layoutFromDom() {
@@ -874,12 +858,18 @@ function layoutFromDom() {
     Array.from(col.querySelectorAll(".card")).map(c => c.dataset.card));
 }
 
+async function saveWidthLayout(n, layout, okMsg) {
+  try {
+    await api("/api/settings", {method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({card_layout: {[String(n)]: layout}})});
+    toast(okMsg);
+  } catch (e) { toast(e.message, true); }
+}
+
 function updateDnd() {
-  const on = columnsForWidth() >= 3;
-  $("cards").classList.toggle("dnd-on", on);
-  document.querySelectorAll(".drag-handle").forEach(h =>
-    h.setAttribute("draggable", on ? "true" : "false"));
-  $("resetlayout").hidden = !(on && localStorage.getItem(LAYOUT_KEY));
+  document.querySelectorAll(".drag-handle").forEach(h => h.setAttribute("draggable", "true"));
+  $("resetlayout").hidden = !savedLayouts[String(columnsForWidth())];
 }
 
 function installDragHandles() {
@@ -908,7 +898,7 @@ function cardAfterPoint(col, y) {
 
 $("cards").addEventListener("dragstart", ev => {
   const handle = ev.target.closest(".drag-handle");
-  if (!handle || handle.getAttribute("draggable") !== "true") { ev.preventDefault(); return; }
+  if (!handle) { ev.preventDefault(); return; }
   draggedCard = handle.closest(".card");
   ev.dataTransfer.effectAllowed = "move";
   ev.dataTransfer.setData("text/plain", draggedCard.dataset.card);
@@ -930,18 +920,21 @@ $("cards").addEventListener("dragend", () => {
   if (!draggedCard) return;
   draggedCard.classList.remove("dragging");
   draggedCard = null;
-  const L = layoutFromDom();
-  localStorage.setItem(LAYOUT_KEY, JSON.stringify(L));
-  applyLayout(L);
+  const n = columnsForWidth();
+  savedLayouts[String(n)] = layoutFromDom();
   updateDnd();
-  toast("Layout saved");
+  saveWidthLayout(n, savedLayouts[String(n)],
+    "Layout saved (" + n + (n > 1 ? " columns)" : " column)"));
 });
 
 $("resetlayout").addEventListener("click", () => {
-  localStorage.removeItem(LAYOUT_KEY);
-  applyLayout(defaultCardLayout || defaultLayout());
+  const n = columnsForWidth();
+  delete savedLayouts[String(n)];
+  lastColCount = 0;
+  layoutMasonry(true);
   updateDnd();
-  toast("Layout reset");
+  saveWidthLayout(n, null,
+    "Layout reset (" + n + (n > 1 ? " columns)" : " column)"));
 });
 
 $("interval").addEventListener("change", async ev => {
@@ -964,9 +957,9 @@ $("runnow").addEventListener("click", async () => {
 
 refresh().then(() => {
   installDragHandles();
-  defaultCardLayout = defaultLayout();   // capture pristine defaults first
-  const saved = loadLayout();
-  if (saved) applyLayout(saved); else layoutMasonry(true);
+  savedLayouts = (lastOverview && lastOverview.settings.card_layout) || {};
+  $("cards").classList.add("dnd-on");
+  layoutMasonry(true);
   updateDnd();
   $("cards").style.visibility = "";
   loadArrChoices("radarr"); loadArrChoices("sonarr");

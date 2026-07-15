@@ -21,10 +21,35 @@ log = logging.getLogger(__name__)
 MIN_INTERVAL_DAYS = 1.0  # never target more than a daily cadence
 
 _LANG_CODE_RE = re.compile(r"^[a-z]{2,3}$")
+_CARD_ID_RE = re.compile(r"^[a-z0-9-]{1,40}$")
+_CARD_LAYOUT_KEYS = ("1", "2", "3")
 
 
 class SettingsError(ValueError):
     pass
+
+
+def _clean_one_layout(cols, n: int) -> list | None:
+    """Validate a single card layout (a list of n columns of card ids).
+
+    Returns a sanitised copy (ids deduplicated across the whole layout) or
+    None if the structure is not n columns of well-formed ids.
+    """
+    if not isinstance(cols, list) or len(cols) != n:
+        return None
+    seen: set[str] = set()
+    out: list[list[str]] = []
+    for col in cols:
+        if not isinstance(col, list):
+            return None
+        col_ids: list[str] = []
+        for card_id in col:
+            if (isinstance(card_id, str) and _CARD_ID_RE.match(card_id)
+                    and card_id not in seen):
+                seen.add(card_id)
+                col_ids.append(card_id)
+        out.append(col_ids)
+    return out if seen else None
 
 
 class SettingsStore:
@@ -112,6 +137,23 @@ class SettingsStore:
             raw = self._data.get("options", {})
         return dict(raw) if isinstance(raw, dict) else {}
 
+    @property
+    def card_layout(self) -> dict:
+        """Per-width dashboard card arrangement, keyed by column count
+        ("1"/"2"/"3"). Each value is that many columns of card ids. Widths the
+        user has not customised are absent (the UI falls back to its default)."""
+        with self._lock:
+            raw = self._data.get("card_layout", {})
+        if not isinstance(raw, dict):
+            return {}
+        cleaned = {}
+        for key in _CARD_LAYOUT_KEYS:
+            if key in raw:
+                one = _clean_one_layout(raw[key], int(key))
+                if one:
+                    cleaned[key] = one
+        return cleaned
+
     def apply_to(self, config):
         """Return a copy of an env-based Config with the UI-set option
         overrides applied. Called at the start of every run (and by the web
@@ -138,6 +180,7 @@ class SettingsStore:
             "tv_languages": self.tv_languages,
             "anime_languages": self.anime_languages,
             "options": self.options(),
+            "card_layout": self.card_layout,
         }
 
     def update(self, payload: dict) -> dict:
@@ -200,6 +243,25 @@ class SettingsStore:
                 normalized[key] = validate_option(defn, value)
             changes["options"] = normalized
 
+        if "card_layout" in payload:
+            layout = payload["card_layout"]
+            if not isinstance(layout, dict):
+                raise SettingsError("card_layout must be an object")
+            normalized_layout: dict = {}
+            for key, cols in layout.items():
+                if key not in _CARD_LAYOUT_KEYS:
+                    raise SettingsError(
+                        f"card_layout keys must be 1, 2 or 3 (got {key!r})")
+                if cols is None:               # reset this width to its default
+                    normalized_layout[key] = None
+                    continue
+                one = _clean_one_layout(cols, int(key))
+                if one is None:
+                    raise SettingsError(
+                        f"card_layout[{key}] must be {key} column(s) of card ids")
+                normalized_layout[key] = one
+            changes["card_layout"] = normalized_layout
+
         with self._lock:
             if "run_interval_days" in changes:
                 self._data["run_interval_days"] = changes["run_interval_days"]
@@ -214,5 +276,18 @@ class SettingsStore:
                     self._data.get("options", {}).pop(key, None)
                 else:
                     self._data.setdefault("options", {})[key] = value
+            if "card_layout" in changes:
+                store = self._data.get("card_layout")
+                if not isinstance(store, dict):
+                    store = {}
+                for key, value in changes["card_layout"].items():
+                    if value is None:      # reset: drop the saved width
+                        store.pop(key, None)
+                    else:
+                        store[key] = value
+                if store:
+                    self._data["card_layout"] = store
+                else:
+                    self._data.pop("card_layout", None)
             self._save()
         return self.snapshot()

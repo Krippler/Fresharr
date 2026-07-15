@@ -94,6 +94,25 @@ def test_language_settings(env):
     assert resp.status_code == 400
 
 
+def test_card_layout_saved_per_width(env):
+    client, settings, _ = env
+    overview = client.get("/api/overview").get_json()
+    assert overview["settings"]["card_layout"] == {}  # nothing customised yet
+
+    resp = client.post("/api/settings", json={"card_layout": {
+        "3": [["status", "schedule"], ["connections"], ["limits"]]}})
+    assert resp.status_code == 200
+    assert settings.card_layout["3"] == [["status", "schedule"], ["connections"], ["limits"]]
+
+    overview = client.get("/api/overview").get_json()
+    assert overview["settings"]["card_layout"]["3"][0] == ["status", "schedule"]
+
+    # Wrong shape for the width is rejected
+    resp = client.post("/api/settings",
+                       json={"card_layout": {"3": [["status"]]}})
+    assert resp.status_code == 400
+
+
 def test_unknown_source_is_400(env):
     client, _, _ = env
     resp = client.post("/api/settings",
