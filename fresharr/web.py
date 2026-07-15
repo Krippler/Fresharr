@@ -273,7 +273,7 @@ INDEX_HTML = """<!doctype html>
                    border: 1px solid #333d49; border-radius: 7px; padding: .4rem .7rem; }
   button { cursor: pointer; }
   button.primary { background: #2f6b3d; border-color: #3a8049; color: #eafff0; }
-  button:disabled { opacity: .5; cursor: wait; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   .stat { display: flex; gap: 1.5rem; flex-wrap: wrap; }
   .stat div span { display: block; }
   .stat .k { color: #8b96a5; font-size: .75rem; text-transform: uppercase;
@@ -538,6 +538,7 @@ function render(o) {
   $("general").innerHTML = o.general_options.map(optionInput).join("");
   renderConnState("radarr", o.arr.radarr);
   renderConnState("sonarr", o.arr.sonarr);
+  updateRunButton();
   wireOptionInputs();
 
   // Expand/collapse a connection by clicking its header.
@@ -680,6 +681,8 @@ async function loadArrChoices(app, isRetry) {
   const active = document.activeElement;
   if (lastOverview && !(active && active.dataset && active.dataset.opt))
     render(lastOverview);
+  else
+    updateRunButton();   // keep the button in sync even mid-edit
   // Configured but not up yet (still starting, slow, wrong port): keep polling
   // so it flips to "connected" on its own once it answers - no page reload.
   if (result.configured && !result.connected) {
@@ -722,6 +725,27 @@ function renderConnState(app, configured) {
       + (ch && ch.error ? " — " + escapeHtml(ch.error) : "");
     el.className = "state err";
   }
+}
+
+// Run Now is only usable once every configured connection has actually
+// connected (and at least one is), so a run is never fired against an app
+// that is still starting, unreachable, or not set up yet.
+function runReady() {
+  if (!lastOverview) return false;
+  const configured = ["radarr", "sonarr"].filter(a => lastOverview.arr[a]);
+  if (!configured.length) return false;
+  return configured.every(a => arrChoices[a] && arrChoices[a].connected);
+}
+
+function updateRunButton() {
+  const btn = $("runnow");
+  if (!btn) return;
+  const running = lastOverview && lastOverview.running;
+  const ready = runReady();
+  btn.disabled = !!running || !ready;
+  btn.title = running ? "A run is already in progress"
+    : ready ? "Run discovery now"
+    : "Connect Radarr and/or Sonarr first";
 }
 
 function langSummary(options, selected) {
@@ -949,10 +973,11 @@ $("interval").addEventListener("change", async ev => {
 
 $("runnow").addEventListener("click", async () => {
   const btn = $("runnow");
+  if (btn.disabled) return;
   btn.disabled = true;
   try { await api("/api/run", {method: "POST"}); toast("Run started"); }
   catch (e) { toast(e.message, true); }
-  setTimeout(() => { btn.disabled = false; refresh(); }, 1500);
+  setTimeout(refresh, 1500);   // refresh re-evaluates readiness for the button
 });
 
 refresh().then(() => {
