@@ -29,7 +29,8 @@ class TraktSource:
     name = "trakt"
 
     def __init__(self, config: Config):
-        self.min_rating = config.trakt_min_rating
+        self.min_rating = {MOVIE: config.trakt_min_rating_movies,
+                           TV: config.trakt_min_rating_tv}
         self.min_votes = config.trakt_min_votes
         self.limit = config.trakt_limit
         self.session = requests.Session()
@@ -43,8 +44,9 @@ class TraktSource:
     def fetch(self) -> list[MediaItem]:
         items = (self._trending("movies", "movie", MOVIE)
                  + self._trending("shows", "show", TV))
-        log.info("Trakt: %d trending items pass rating >= %.1f",
-                 len(items), self.min_rating)
+        log.info("Trakt: %d trending items pass rating (movies >= %.1f, "
+                 "TV >= %.1f)", len(items), self.min_rating[MOVIE],
+                 self.min_rating[TV])
         return items
 
     def _trending(self, endpoint: str, key: str, media_type: str) -> list[MediaItem]:
@@ -79,8 +81,9 @@ class TraktSource:
             if not isinstance(media, dict):
                 continue
             item = self._parse_item(media, media_type)
-            if item and (not self.min_rating
-                         or (item.audience_score or 0) >= self.min_rating * 10) \
+            min_rating = self.min_rating[media_type]
+            if item and (not min_rating
+                         or (item.audience_score or 0) >= min_rating * 10) \
                     and (not self.min_votes
                          or (item.votes or 0) >= self.min_votes):
                 items.append(item)

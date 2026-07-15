@@ -52,6 +52,26 @@ def test_fetch_filters_by_metascore(monkeypatch):
     assert [(i.title, i.media_type) for i in items] == [("Dune: Part Two", MOVIE)]
 
 
+MOVIE_HTML = ('<div data-title="Okay Movie"><span>Jan 1, 2026</span>'
+              '<div title="Metascore 80 out of 100">80</div></div>')
+TV_HTML = ('<div data-title="Okay Show"><span>Jan 1, 2026</span>'
+           '<div title="Metascore 60 out of 100">60</div></div>')
+
+
+def test_movie_and_tv_use_separate_thresholds(monkeypatch):
+    # Movies need 85 (drops the 80 movie); TV needs 55 (keeps the 60 show).
+    cfg = Config(radarr_url="http://x", radarr_api_key="k",
+                 metacritic_min_score_movies=85, metacritic_min_score_tv=55)
+    source = MetacriticSource(cfg)
+
+    def fake_get(url, params=None, timeout=None):
+        return FakeResponse(MOVIE_HTML if "/browse/movie/" in url else TV_HTML)
+
+    monkeypatch.setattr(source.session, "get", fake_get)
+    items = source.fetch()
+    assert [(i.title, i.media_type) for i in items] == [("Okay Show", TV)]
+
+
 def test_layout_change_degrades_gracefully():
     assert parse_browse_html("<html>redesign</html>", TV, "metacritic") == []
 

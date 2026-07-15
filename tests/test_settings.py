@@ -126,7 +126,7 @@ def test_options_override_env_config(tmp_path):
         "radarr_url": "http://radarr:7878/",
         "radarr_api_key": "ui-key",
         "rt_min_critics_score": "90",
-        "metacritic_min_score": 88,
+        "metacritic_min_score_movies": 88,
         "rt_movie_lists": "movies_in_theaters, movies_at_home",
     }})
 
@@ -136,7 +136,7 @@ def test_options_override_env_config(tmp_path):
     assert effective.radarr_api_key == "ui-key"
     assert effective.radarr_enabled
     assert effective.rt_min_critics_score == 90       # coerced to int
-    assert effective.metacritic_min_score == 88
+    assert effective.metacritic_min_score_movies == 88
     assert effective.rt_movie_lists == ["movies_in_theaters", "movies_at_home"]
     assert effective.tmdb_api_key == "env-tmdb"       # env value untouched
     assert env_config.rt_min_critics_score == 80      # original not mutated
@@ -160,7 +160,24 @@ def test_option_validation(tmp_path):
     with pytest.raises(SettingsError, match="at least"):
         store.update({"options": {"max_items_per_run": 0}})
     with pytest.raises(SettingsError, match="must be a number"):
-        store.update({"options": {"metacritic_min_score": "high"}})
+        store.update({"options": {"metacritic_min_score_movies": "high"}})
+
+
+def test_legacy_split_option_migrates_to_movie_and_tv(tmp_path):
+    from fresharr.config import Config
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"options": {
+        "metacritic_min_score": 82, "tmdb_min_rating": 8.0, "trakt_min_rating": 6.5}}))
+    store = SettingsStore(str(path), DEFAULTS)
+    opts = store.options()
+    # Legacy single key is gone, replaced by movie + TV keys with the value.
+    assert "metacritic_min_score" not in opts
+    assert opts["metacritic_min_score_movies"] == 82
+    assert opts["metacritic_min_score_tv"] == 82
+    effective = store.apply_to(Config())
+    assert effective.tmdb_min_rating_movies == 8.0
+    assert effective.tmdb_min_rating_tv == 8.0
+    assert effective.trakt_min_rating_tv == 6.5
 
 
 def test_card_layout_roundtrip_per_width(tmp_path):

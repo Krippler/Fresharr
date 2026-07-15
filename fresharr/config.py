@@ -56,22 +56,25 @@ class Config:
     rt_min_audience_score: int = 0
     rt_max_pages: int = 2
 
-    # TMDB
+    # TMDB (separate rating thresholds for movies and TV)
     tmdb_api_key: str = ""
-    tmdb_min_rating: float = 7.5
+    tmdb_min_rating_movies: float = 7.5
+    tmdb_min_rating_tv: float = 7.5
     tmdb_min_votes: int = 50
     tmdb_released_within_days: int = 90
     tmdb_movies: bool = True
     tmdb_tv: bool = True
 
-    # Trakt
+    # Trakt (separate rating thresholds for movies and TV)
     trakt_client_id: str = ""
-    trakt_min_rating: float = 7.0
+    trakt_min_rating_movies: float = 7.0
+    trakt_min_rating_tv: float = 7.0
     trakt_min_votes: int = 0
     trakt_limit: int = 40
 
-    # Metacritic
-    metacritic_min_score: int = 75
+    # Metacritic (separate Metascore thresholds for movies and TV)
+    metacritic_min_score_movies: int = 75
+    metacritic_min_score_tv: int = 75
 
     # Letterboxd
     letterboxd_min_rating: float = 3.5  # 0-5 stars
@@ -122,6 +125,11 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         config_dir = _str("CONFIG_DIR", "/config")
+        # Legacy single-threshold env vars seed both the movie and TV
+        # defaults, so existing setups keep working after the split.
+        tmdb_rating = _float("TMDB_MIN_RATING", 7.5)
+        trakt_rating = _float("TRAKT_MIN_RATING", 7.0)
+        metacritic_score = _int("METACRITIC_MIN_SCORE", 75)
         cfg = cls(
             rt_movie_lists=_list(
                 # Theatrical certified-fresh only by default: its dates are
@@ -142,16 +150,19 @@ class Config:
             rt_min_audience_score=_int("RT_MIN_AUDIENCE_SCORE", 0),
             rt_max_pages=_int("RT_MAX_PAGES", 2),
             tmdb_api_key=_str("TMDB_API_KEY"),
-            tmdb_min_rating=_float("TMDB_MIN_RATING", 7.5),
+            tmdb_min_rating_movies=_float("TMDB_MIN_RATING_MOVIES", tmdb_rating),
+            tmdb_min_rating_tv=_float("TMDB_MIN_RATING_TV", tmdb_rating),
             tmdb_min_votes=_int("TMDB_MIN_VOTES", 50),
             tmdb_released_within_days=_int("TMDB_RELEASED_WITHIN_DAYS", 90),
             tmdb_movies=_bool("TMDB_MOVIES", True),
             tmdb_tv=_bool("TMDB_TV", True),
             trakt_client_id=_str("TRAKT_CLIENT_ID"),
-            trakt_min_rating=_float("TRAKT_MIN_RATING", 7.0),
+            trakt_min_rating_movies=_float("TRAKT_MIN_RATING_MOVIES", trakt_rating),
+            trakt_min_rating_tv=_float("TRAKT_MIN_RATING_TV", trakt_rating),
             trakt_min_votes=_int("TRAKT_MIN_VOTES", 0),
             trakt_limit=_int("TRAKT_LIMIT", 40),
-            metacritic_min_score=_int("METACRITIC_MIN_SCORE", 75),
+            metacritic_min_score_movies=_int("METACRITIC_MIN_SCORE_MOVIES", metacritic_score),
+            metacritic_min_score_tv=_int("METACRITIC_MIN_SCORE_TV", metacritic_score),
             letterboxd_min_rating=_float("LETTERBOXD_MIN_RATING", 3.5),
             letterboxd_min_reviews=_int("LETTERBOXD_MIN_REVIEWS", 0),
             letterboxd_max_films=_int("LETTERBOXD_MAX_FILMS", 30),

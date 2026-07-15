@@ -24,7 +24,8 @@ class TmdbSource:
 
     def __init__(self, config: Config):
         self.api_key = config.tmdb_api_key
-        self.min_rating = config.tmdb_min_rating
+        self.min_rating_movies = config.tmdb_min_rating_movies
+        self.min_rating_tv = config.tmdb_min_rating_tv
         self.min_votes = config.tmdb_min_votes
         self.released_within_days = config.tmdb_released_within_days
         self.include_movies = config.tmdb_movies
@@ -36,27 +37,29 @@ class TmdbSource:
         items: list[MediaItem] = []
         if self.include_movies:
             items.extend(self._discover(
-                "movie", MOVIE,
+                "movie", MOVIE, self.min_rating_movies,
                 {"primary_release_date.gte": since,
                  "primary_release_date.lte": date.today().isoformat()},
             ))
         if self.include_tv:
             items.extend(self._discover(
-                "tv", TV,
+                "tv", TV, self.min_rating_tv,
                 {"first_air_date.gte": since,
                  "first_air_date.lte": date.today().isoformat()},
             ))
-        log.info("TMDB: %d items (rating >= %.1f, votes >= %d, released since %s)",
-                 len(items), self.min_rating, self.min_votes, since)
+        log.info("TMDB: %d items (movies >= %.1f, TV >= %.1f, votes >= %d, "
+                 "released since %s)", len(items), self.min_rating_movies,
+                 self.min_rating_tv, self.min_votes, since)
         return items
 
-    def _discover(self, kind: str, media_type: str, date_params: dict) -> list[MediaItem]:
+    def _discover(self, kind: str, media_type: str, min_rating: float,
+                  date_params: dict) -> list[MediaItem]:
         collected: list[MediaItem] = []
         for page in range(1, MAX_PAGES + 1):
             params = {
                 "api_key": self.api_key,
                 "sort_by": "vote_average.desc",
-                "vote_average.gte": self.min_rating,
+                "vote_average.gte": min_rating,
                 "vote_count.gte": self.min_votes,
                 "include_adult": "false",
                 "page": page,

@@ -87,7 +87,8 @@ SOURCE_DEFS: list[SourceDef] = [
         default_enabled=False,
         requires="",
         factory=_metacritic_factory,
-        detail=lambda c: f"metascore ≥ {c.metacritic_min_score}",
+        detail=lambda c: f"metascore ≥ {c.metacritic_min_score_movies} movies / "
+                         f"{c.metacritic_min_score_tv} TV",
     ),
     SourceDef(
         name="letterboxd",
@@ -110,8 +111,9 @@ SOURCE_DEFS: list[SourceDef] = [
         default_enabled=False,
         requires="TMDB_API_KEY",
         factory=_tmdb_factory,
-        detail=lambda c: f"rating ≥ {c.tmdb_min_rating:.1f}/10, "
-                         f"released within {c.tmdb_released_within_days} days",
+        detail=lambda c: f"rating ≥ {c.tmdb_min_rating_movies:.1f} movies / "
+                         f"{c.tmdb_min_rating_tv:.1f} TV, within "
+                         f"{c.tmdb_released_within_days} days",
     ),
     SourceDef(
         name="trakt",
@@ -121,7 +123,8 @@ SOURCE_DEFS: list[SourceDef] = [
         default_enabled=False,
         requires="TRAKT_CLIENT_ID",
         factory=_trakt_factory,
-        detail=lambda c: f"rating ≥ {c.trakt_min_rating:.1f}/10",
+        detail=lambda c: f"rating ≥ {c.trakt_min_rating_movies:.1f} movies / "
+                         f"{c.trakt_min_rating_tv:.1f} TV",
     ),
     SourceDef(
         name="anilist",

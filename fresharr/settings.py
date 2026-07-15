@@ -24,6 +24,14 @@ _LANG_CODE_RE = re.compile(r"^[a-z]{2,3}$")
 _CARD_ID_RE = re.compile(r"^[a-z0-9-]{1,40}$")
 _CARD_LAYOUT_KEYS = ("1", "2", "3")
 
+# Rating thresholds that were a single knob before movies and TV got their
+# own: a legacy value seeds both new keys so saved settings keep working.
+_SPLIT_OPTION_MIGRATIONS = {
+    "metacritic_min_score": ("metacritic_min_score_movies", "metacritic_min_score_tv"),
+    "tmdb_min_rating": ("tmdb_min_rating_movies", "tmdb_min_rating_tv"),
+    "trakt_min_rating": ("trakt_min_rating_movies", "trakt_min_rating_tv"),
+}
+
 
 class SettingsError(ValueError):
     pass
@@ -72,6 +80,18 @@ class SettingsStore:
             log.warning("Could not read settings file %s (%s); using defaults",
                         self.path, exc)
             self._data = {}
+        self._migrate_split_options()
+
+    def _migrate_split_options(self) -> None:
+        options = self._data.get("options")
+        if not isinstance(options, dict):
+            return
+        for legacy, (movies_key, tv_key) in _SPLIT_OPTION_MIGRATIONS.items():
+            if legacy not in options:
+                continue
+            value = options.pop(legacy)
+            options.setdefault(movies_key, value)
+            options.setdefault(tv_key, value)
 
     def _save(self) -> None:
         directory = os.path.dirname(self.path) or "."

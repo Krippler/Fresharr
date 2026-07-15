@@ -44,7 +44,8 @@ class MetacriticSource:
     name = "metacritic"
 
     def __init__(self, config: Config):
-        self.min_score = config.metacritic_min_score
+        self.min_score = {MOVIE: config.metacritic_min_score_movies,
+                          TV: config.metacritic_min_score_tv}
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
@@ -55,10 +56,11 @@ class MetacriticSource:
         items = (self._fetch_browse("movie", MOVIE)
                  + self._fetch_browse("tv", TV))
         kept = [i for i in items
-                if not self.min_score
-                or (i.critics_score or 0) >= self.min_score]
-        log.info("Metacritic: %d items fetched, %d pass metascore >= %d",
-                 len(items), len(kept), self.min_score)
+                if not self.min_score[i.media_type]
+                or (i.critics_score or 0) >= self.min_score[i.media_type]]
+        log.info("Metacritic: %d items fetched, %d pass metascore "
+                 "(movies >= %d, TV >= %d)", len(items), len(kept),
+                 self.min_score[MOVIE], self.min_score[TV])
         return kept
 
     def _fetch_browse(self, kind: str, media_type: str) -> list[MediaItem]:

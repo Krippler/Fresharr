@@ -34,7 +34,8 @@ class FakeResponse:
 
 def make_source(**overrides) -> TraktSource:
     cfg = Config(radarr_url="http://x", radarr_api_key="k",
-                 trakt_client_id="cid", trakt_min_rating=7.0)
+                 trakt_client_id="cid",
+                 trakt_min_rating_movies=7.0, trakt_min_rating_tv=7.0)
     for key, value in overrides.items():
         setattr(cfg, key, value)
     return TraktSource(cfg)
@@ -58,6 +59,20 @@ def test_fetch_trending(monkeypatch):
     assert dune.audience_score == 82
     assert dune.votes == 25000
     assert dune.url == "https://trakt.tv/movies/dune-part-two-2024"
+
+
+def test_movie_and_tv_use_separate_rating_thresholds(monkeypatch):
+    # Movies need 9.0 (drops Dune 8.2, keeps Tiny 9.1); TV threshold 0 keeps
+    # Great Show 8.9.
+    source = make_source(trakt_min_rating_movies=9.0, trakt_min_rating_tv=0,
+                         trakt_min_votes=0)
+
+    def fake_get(url, params=None, timeout=None):
+        return FakeResponse(TRENDING_MOVIES if "/movies/" in url else TRENDING_SHOWS)
+
+    monkeypatch.setattr(source.session, "get", fake_get)
+    items = source.fetch()
+    assert [i.title for i in items] == ["Tiny Sample", "Great Show"]
 
 
 def test_fetch_filters_by_votes(monkeypatch):
