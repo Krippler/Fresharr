@@ -1,6 +1,10 @@
+import requests
+
 from fresharr.config import Config
 from fresharr.models import MOVIE, TV, MediaItem
-from fresharr.runner import collect_items
+from fresharr.runner import collect_items, run_once
+from fresharr.settings import SettingsStore
+from fresharr.sources import SOURCE_DEFAULTS
 
 
 class FakeSource:
@@ -117,3 +121,84 @@ def test_each_language_list_is_independent(monkeypatch):
     result = run_collect_with_settings(monkeypatch, settings, LANG_ITEMS)
     assert "French Movie" not in {i.title for i in result}
     assert len(result) == len(LANG_ITEMS) - 1
+
+
+def make_run_config(tmp_path, **overrides) -> Config:
+    cfg = Config(radarr_url="http://x", radarr_api_key="k",
+                 state_file=str(tmp_path / "state.json"),
+                 status_file=str(tmp_path / "status.json"),
+                 settings_file=str(tmp_path / "settings.json"))
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+    return cfg
+
+
+def make_movies(n) -> list[MediaItem]:
+    return [MediaItem(title=f"Movie {i}", media_type=MOVIE, source="s", year=2026)
+            for i in range(n)]
+
+
+def test_stalled_arr_deferred_after_repeated_timeouts(tmp_path, monkeypatch):
+    monkeypatch.setattr("fresharr.runner.build_sources",
+                        lambda cfg, s: [FakeSource(make_movies(8))])
+
+    class StalledRadarr:
+        app_name = "Radarr"
+
+        def __init__(self, config):
+            self.add_calls = 0
+
+        def check_connection(self):
+            pass
+
+        def load_library(self):
+            pass
+
+        def add(self, item):
+            self.add_calls += 1
+            raise requests.ReadTimeout("read timed out")
+
+    created = []
+    monkeypatch.setattr("fresharr.runner.Radarr",
+                        lambda config: created.append(StalledRadarr(config)) or created[-1])
+    config = make_run_config(tmp_path, sonarr_url="", sonarr_api_key="")
+    settings = SettingsStore(config.settings_file, SOURCE_DEFAULTS)
+
+    summary = run_once(config, settings)
+    # Stops after 3 consecutive failures instead of hammering all 8 items.
+    assert created[0].add_calls == 3
+    assert summary["counts"]["failed"] == 3
+    assert summary["counts"]["skipped"] == 5
+    assert "stopped responding" in (summary["error"] or "")
+
+
+def test_arr_whose_library_wont_load_is_deferred(tmp_path, monkeypatch):
+    monkeypatch.setattr("fresharr.runner.build_sources",
+                        lambda cfg, s: [FakeSource(make_movies(4))])
+
+    class UnreachableRadarr:
+        app_name = "Radarr"
+
+        def __init__(self, config):
+            self.add_calls = 0
+
+        def check_connection(self):
+            pass
+
+        def load_library(self):
+            raise requests.ConnectionError("connection refused")
+
+        def add(self, item):  # pragma: no cover - should never be called
+            self.add_calls += 1
+            raise AssertionError("add() should not run for a deferred client")
+
+    created = []
+    monkeypatch.setattr("fresharr.runner.Radarr",
+                        lambda config: created.append(UnreachableRadarr(config)) or created[-1])
+    config = make_run_config(tmp_path, sonarr_url="", sonarr_api_key="")
+    settings = SettingsStore(config.settings_file, SOURCE_DEFAULTS)
+
+    summary = run_once(config, settings)
+    assert created[0].add_calls == 0            # never tried to add
+    assert summary["counts"]["added"] == 0
+    assert "not responding" in (summary["error"] or "")

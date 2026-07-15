@@ -99,15 +99,33 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
         error = ("Neither Radarr nor Sonarr is configured - add a connection "
                  "in the web interface")
         log.error("%s", error)
-    for client in clients.values():
+
+    # Connect to each *arr and load its library once, up front. A client that
+    # can't be reached or whose library won't load is taken out of service for
+    # this run and its items are deferred to the next run - rather than being
+    # retried once per candidate. Without this a single stalled Radarr/Sonarr
+    # turns one run into a long string of 60-second timeouts.
+    deferred: dict[str, str] = {}   # media_type -> reason its items were skipped
+    for media_type, client in clients.items():
         try:
             client.check_connection()
-        except ArrError as exc:
-            log.error("%s", exc)
-            error = str(exc)
+            client.load_library()
+        except (ArrError, requests.RequestException) as exc:
+            log.error("%s is not responding; deferring its items to the next "
+                      "run: %s", client.app_name, exc)
+            deferred[media_type] = f"{client.app_name} not responding: {exc}"
+    if clients and len(deferred) == len(clients) and error is None:
+        error = "; ".join(dict.fromkeys(deferred.values()))
 
     if error is None:
+        # If an *arr stops responding mid-run, stop sending to it after this
+        # many consecutive failures and defer the rest to the next run.
+        FAILURE_LIMIT = 3
+        consecutive_failures = {media_type: 0 for media_type in clients}
         for item in items:
+            if item.media_type in deferred:
+                counts["skipped"] += 1
+                continue
             if state.should_skip(item.key):
                 counts["skipped"] += 1
                 continue
@@ -122,12 +140,20 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                 continue
             try:
                 status = client.add(item)
+                consecutive_failures[item.media_type] = 0
             except ArrError as exc:
                 log.error("Configuration problem adding %s: %s", item.describe(), exc)
                 status = state_mod.FAILED
             except requests.RequestException as exc:
                 log.warning("Failed to add %s: %s", item.describe(), exc)
                 status = state_mod.FAILED
+                consecutive_failures[item.media_type] += 1
+                if consecutive_failures[item.media_type] >= FAILURE_LIMIT:
+                    reason = (f"{client.app_name} stopped responding after "
+                              f"{FAILURE_LIMIT} consecutive failures; deferring "
+                              f"the rest to the next run")
+                    log.error("%s", reason)
+                    deferred[item.media_type] = reason
             state.record(item.key, status, item.title)
             counts[status] = counts.get(status, 0) + 1
             if status == state_mod.ADDED:
@@ -135,6 +161,9 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
 
         if not config.dry_run:
             state.save()
+        # Surface a partial outage (one *arr down, the other fine) in the UI.
+        if deferred and error is None:
+            error = "; ".join(dict.fromkeys(deferred.values()))
         log.info(
             "Run complete: %d added, %d already in library, %d not found, "
             "%d failed, %d previously handled%s",
