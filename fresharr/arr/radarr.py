@@ -6,7 +6,13 @@ from .. import state
 from ..config import Config
 from ..models import MediaItem
 from ..util import normalize_title
-from .base import ArrClient, is_already_exists_error, lookup_terms, pick_best
+from .base import (
+    ArrClient,
+    excluded_language,
+    is_already_exists_error,
+    lookup_terms,
+    pick_best,
+)
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +45,7 @@ class Radarr(ArrClient):
             return True
         return (normalize_title(item.title), item.year) in self._title_years
 
-    def add(self, item: MediaItem) -> str:
+    def add(self, item: MediaItem, allowed_languages: list[str] = ()) -> str:
         """Add a movie; returns a state status string."""
         if self._in_library(item, item.tmdb_id):
             return state.EXISTS
@@ -56,6 +62,12 @@ class Radarr(ArrClient):
             return state.NOT_FOUND
         if self._in_library(item, match.get("tmdbId")):
             return state.EXISTS
+
+        excluded = excluded_language(match, allowed_languages)
+        if excluded:
+            log.info("Radarr: skipping %s - original language %s is not in the "
+                     "selected languages", item.describe(), excluded)
+            return state.FILTERED
 
         payload = dict(match)
         payload.update({

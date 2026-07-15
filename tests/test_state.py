@@ -27,6 +27,14 @@ def test_not_found_retried_after_delay(tmp_path):
     assert not state.should_skip("movie:new:2026")
 
 
+def test_filtered_rechecked_after_delay(tmp_path):
+    state = State(str(tmp_path / "state.json"), retry_not_found_days=7)
+    state.record("movie:italian-film:2026", state_mod.FILTERED, "Italian Film")
+    assert state.should_skip("movie:italian-film:2026")   # skipped for now
+    state._items["movie:italian-film:2026"]["at"] = int(time.time()) - 8 * 86400
+    assert not state.should_skip("movie:italian-film:2026")  # re-checked later
+
+
 def test_failed_always_retried(tmp_path):
     state = State(str(tmp_path / "state.json"))
     state.record("movie:flaky:2026", state_mod.FAILED, "Flaky")

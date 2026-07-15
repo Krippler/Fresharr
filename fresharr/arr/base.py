@@ -127,6 +127,31 @@ class ArrClient:
         return self._root_folder_path
 
 
+# Radarr/Sonarr report a match's original language by its English name; map
+# the ones the UI offers back to ISO 639-1 codes for the language filter.
+# A name we don't recognise maps to None and is treated as "unknown" (passes),
+# so the filter never drops a title just because its language is unfamiliar.
+_LANGUAGE_NAME_TO_CODE = {
+    "english": "en", "japanese": "ja", "korean": "ko", "chinese": "zh",
+    "mandarin": "zh", "cantonese": "zh", "spanish": "es", "french": "fr",
+    "german": "de", "italian": "it", "portuguese": "pt", "hindi": "hi",
+    "russian": "ru", "swedish": "sv", "danish": "da", "norwegian": "no",
+}
+
+
+def excluded_language(match: dict, allowed: list[str]) -> str | None:
+    """If the match's original language is known and NOT in the allowed ISO
+    code list, return its display name (so the caller can skip it); otherwise
+    return None. An empty allow-list or an unrecognised language passes."""
+    if not allowed:
+        return None
+    name = ((match.get("originalLanguage") or {}).get("name") or "").strip()
+    code = _LANGUAGE_NAME_TO_CODE.get(name.lower())
+    if code and code not in allowed:
+        return name or code
+    return None
+
+
 def is_already_exists_error(exc: requests.HTTPError) -> bool:
     """Radarr/Sonarr reply 400 with a validation message when the title is
     already in the library; treat that as success rather than failure."""

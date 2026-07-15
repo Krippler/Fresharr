@@ -6,7 +6,13 @@ from .. import state
 from ..config import Config
 from ..models import MediaItem
 from ..util import normalize_title
-from .base import ArrClient, is_already_exists_error, lookup_terms, pick_best
+from .base import (
+    ArrClient,
+    excluded_language,
+    is_already_exists_error,
+    lookup_terms,
+    pick_best,
+)
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +58,7 @@ class Sonarr(ArrClient):
                 self._language_profile_id = None
         return self._language_profile_id
 
-    def add(self, item: MediaItem) -> str:
+    def add(self, item: MediaItem, allowed_languages: list[str] = ()) -> str:
         """Add a series; returns a state status string."""
         if self._in_library(item, None):
             return state.EXISTS
@@ -70,6 +76,12 @@ class Sonarr(ArrClient):
             return state.NOT_FOUND
         if self._in_library(item, match["tvdbId"]):
             return state.EXISTS
+
+        excluded = excluded_language(match, allowed_languages)
+        if excluded:
+            log.info("Sonarr: skipping %s - original language %s is not in the "
+                     "selected languages", item.describe(), excluded)
+            return state.FILTERED
 
         payload = dict(match)
         payload.update({

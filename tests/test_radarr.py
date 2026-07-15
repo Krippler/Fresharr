@@ -129,6 +129,44 @@ def test_add_without_tag_sends_no_tags_key():
     assert "tags" not in payload   # no /tag call, unchanged payload
 
 
+ITALIAN_LOOKUP = [{"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134,
+                   "titleSlug": "dune-part-two", "images": [],
+                   "originalLanguage": {"id": 5, "name": "Italian"}}]
+
+
+def test_add_skips_when_language_not_allowed():
+    radarr, session = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): ITALIAN_LOOKUP,
+    })
+    # Filter allows only English/Japanese; the match is Italian -> filtered out.
+    assert radarr.add(ITEM, ["en", "ja"]) == state.FILTERED
+    assert session.posts == []            # never attempted the add
+
+
+def test_add_allows_matching_language():
+    radarr, session = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): ITALIAN_LOOKUP,
+        ("GET", "/qualityprofile"): [{"id": 4, "name": "HD-1080p"}],
+        ("GET", "/rootfolder"): [{"path": "/movies"}],
+        ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
+    })
+    assert radarr.add(ITEM, ["it", "en"]) == state.ADDED  # Italian is allowed
+
+
+def test_add_passes_unknown_language():
+    # An empty/unknown originalLanguage never gets dropped by the filter.
+    radarr, _ = make_radarr({
+        ("GET", "/movie"): [],
+        ("GET", "/movie/lookup"): LOOKUP_RESULT,  # no originalLanguage field
+        ("GET", "/qualityprofile"): [{"id": 4, "name": "HD-1080p"}],
+        ("GET", "/rootfolder"): [{"path": "/movies"}],
+        ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
+    })
+    assert radarr.add(ITEM, ["ja"]) == state.ADDED
+
+
 def test_add_skips_when_already_in_library():
     radarr, session = make_radarr({
         ("GET", "/movie"): [{"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134}],

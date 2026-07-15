@@ -1,5 +1,6 @@
 import requests
 
+from fresharr import state as state_mod
 from fresharr.config import Config
 from fresharr.models import MOVIE, TV, MediaItem
 from fresharr.runner import collect_items, run_once
@@ -154,7 +155,7 @@ def test_stalled_arr_deferred_after_repeated_timeouts(tmp_path, monkeypatch):
         def load_library(self):
             pass
 
-        def add(self, item):
+        def add(self, item, allowed_languages=()):
             self.add_calls += 1
             raise requests.ReadTimeout("read timed out")
 
@@ -188,7 +189,7 @@ def test_arr_whose_library_wont_load_is_deferred(tmp_path, monkeypatch):
         def load_library(self):
             raise requests.ConnectionError("connection refused")
 
-        def add(self, item):  # pragma: no cover - should never be called
+        def add(self, item, allowed_languages=()):  # pragma: no cover - never called
             self.add_calls += 1
             raise AssertionError("add() should not run for a deferred client")
 
@@ -202,3 +203,37 @@ def test_arr_whose_library_wont_load_is_deferred(tmp_path, monkeypatch):
     assert created[0].add_calls == 0            # never tried to add
     assert summary["counts"]["added"] == 0
     assert "not responding" in (summary["error"] or "")
+
+
+def test_run_passes_language_filter_to_arr(tmp_path, monkeypatch):
+    # A source (e.g. Metacritic) that reports no language still gets language-
+    # checked at the *arr, using the movie list for a movie item.
+    monkeypatch.setattr("fresharr.runner.build_sources", lambda cfg, s: [FakeSource([
+        MediaItem(title="Foreign Film", media_type=MOVIE, source="metacritic", year=2026)])])
+    captured = {}
+
+    class CapturingRadarr:
+        app_name = "Radarr"
+
+        def __init__(self, config):
+            pass
+
+        def check_connection(self):
+            pass
+
+        def load_library(self):
+            pass
+
+        def add(self, item, allowed_languages=()):
+            captured["langs"] = list(allowed_languages)
+            return state_mod.FILTERED   # pretend the arr metadata said it's foreign
+
+    monkeypatch.setattr("fresharr.runner.Radarr", lambda config: CapturingRadarr(config))
+    config = make_run_config(tmp_path, sonarr_url="", sonarr_api_key="")
+    settings = SettingsStore(config.settings_file, SOURCE_DEFAULTS)
+    settings.update({"movie_languages": ["en", "ja"]})
+
+    summary = run_once(config, settings)
+    assert captured["langs"] == ["en", "ja"]
+    assert summary["counts"]["filtered"] == 1
+    assert summary["counts"]["added"] == 0

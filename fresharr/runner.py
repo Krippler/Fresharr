@@ -17,6 +17,18 @@ from .status import load_status, save_status
 log = logging.getLogger(__name__)
 
 
+def _allowed_languages(item: MediaItem, settings: SettingsStore) -> list[str]:
+    """The original-language allow-list (ISO codes) for an item's type - the
+    same movie/TV/anime split used when collecting candidates."""
+    if item.anime:
+        raw = getattr(settings, "anime_languages", None)
+    elif item.media_type == MOVIE:
+        raw = getattr(settings, "movie_languages", None)
+    else:
+        raw = getattr(settings, "tv_languages", None)
+    return [lang.lower() for lang in (raw or [])]
+
+
 def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
     items: list[MediaItem] = []
     for source in build_sources(config, settings):
@@ -85,7 +97,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
     log.info("%d unique candidates after filtering", len(items))
 
     counts = {"added": 0, "exists": 0, "not_found": 0, "failed": 0,
-              "skipped": 0, "would_add": 0}
+              "skipped": 0, "would_add": 0, "filtered": 0}
     added_titles: list[str] = []
     error: str | None = None
 
@@ -139,7 +151,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                 counts["would_add"] += 1
                 continue
             try:
-                status = client.add(item)
+                status = client.add(item, _allowed_languages(item, settings))
                 consecutive_failures[item.media_type] = 0
             except ArrError as exc:
                 log.error("Configuration problem adding %s: %s", item.describe(), exc)
@@ -166,9 +178,9 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
             error = "; ".join(dict.fromkeys(deferred.values()))
         log.info(
             "Run complete: %d added, %d already in library, %d not found, "
-            "%d failed, %d previously handled%s",
+            "%d filtered by language, %d failed, %d previously handled%s",
             counts["added"], counts["exists"], counts["not_found"],
-            counts["failed"], counts["skipped"],
+            counts["filtered"], counts["failed"], counts["skipped"],
             f", {counts['would_add']} would be added (dry run)" if config.dry_run else "",
         )
 

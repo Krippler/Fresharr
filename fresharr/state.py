@@ -11,6 +11,7 @@ ADDED = "added"          # successfully sent to Radarr/Sonarr
 EXISTS = "exists"        # already present in the *arr library
 NOT_FOUND = "not_found"  # lookup returned no usable match (retried after a delay)
 FAILED = "failed"        # add attempt errored (retried on every run)
+FILTERED = "filtered"    # excluded by a filter, e.g. original language (re-checked after a delay)
 
 
 class State:
@@ -60,7 +61,9 @@ class State:
         status = entry.get("status")
         if status in (ADDED, EXISTS):
             return True
-        if status == NOT_FOUND:
+        if status in (NOT_FOUND, FILTERED):
+            # Re-check periodically so broadening the language filter later
+            # gives these titles another chance, without a lookup every run.
             age = time.time() - entry.get("at", 0)
             return age < self.retry_not_found_seconds
         return False  # FAILED and anything unknown: retry
