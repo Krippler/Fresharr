@@ -17,9 +17,14 @@ log = logging.getLogger(__name__)
 
 API_BASE = "https://api.jikan.moe/v4"
 
-ENDPOINTS = [
+# What's airing now (default) vs the all-time top-rated lists (back catalog).
+RECENT_ENDPOINTS = [
     "/seasons/now",
     "/top/anime?filter=airing",
+]
+BACK_CATALOG_ENDPOINTS = [
+    "/top/anime?type=tv",
+    "/top/anime?type=movie",
 ]
 
 TYPE_MAP = {"TV": TV, "ONA": TV, "Movie": MOVIE}
@@ -31,12 +36,14 @@ class MyAnimeListSource:
     def __init__(self, config: Config):
         self.min_score = config.mal_min_score
         self.min_votes = config.mal_min_votes
+        self.endpoints = (BACK_CATALOG_ENDPOINTS if config.back_catalog
+                          else RECENT_ENDPOINTS)
         self.session = requests.Session()
 
     def fetch(self) -> list[MediaItem]:
         items: list[MediaItem] = []
         seen_ids: set[int] = set()
-        for endpoint in ENDPOINTS:
+        for endpoint in self.endpoints:
             try:
                 resp = self.session.get(f"{API_BASE}{endpoint}", timeout=30)
                 resp.raise_for_status()

@@ -88,6 +88,25 @@ def test_fetch_filters_by_votes(monkeypatch):
     assert [i.title for i in items] == ["Dune: Part Two"]
 
 
+POPULAR_MOVIES = [  # /movies/popular returns bare movie objects, not wrapped
+    {"title": "Acclaimed Classic", "year": 2021, "rating": 8.4, "votes": 9000,
+     "ids": {"trakt": 9, "slug": "acclaimed-classic", "tmdb": 99}},
+]
+
+
+def test_back_catalog_uses_popular_bare_list(monkeypatch):
+    source = make_source(back_catalog=True)
+
+    def fake_get(url, params=None, timeout=None):
+        assert "/popular" in url and "/trending" not in url
+        return FakeResponse(POPULAR_MOVIES if "/movies/" in url else [])
+
+    monkeypatch.setattr(source.session, "get", fake_get)
+    items = source.fetch()
+    assert [i.title for i in items] == ["Acclaimed Classic"]
+    assert items[0].tmdb_id == 99
+
+
 def test_api_error_degrades_gracefully(monkeypatch):
     import requests
     source = make_source()

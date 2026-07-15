@@ -46,6 +46,12 @@ class MetacriticSource:
     def __init__(self, config: Config):
         self.min_score = {MOVIE: config.metacritic_min_score_movies,
                           TV: config.metacritic_min_score_tv}
+        # Back catalog reaches back to the minimum year; otherwise just the
+        # last year of releases.
+        if config.back_catalog:
+            self.release_year_min = config.min_year or (date.today().year - 10)
+        else:
+            self.release_year_min = date.today().year - 1
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
@@ -67,7 +73,7 @@ class MetacriticSource:
         try:
             resp = self.session.get(
                 BROWSE_URL.format(kind=kind),
-                params={"releaseYearMin": date.today().year - 1},
+                params={"releaseYearMin": self.release_year_min},
                 timeout=30,
             )
             resp.raise_for_status()

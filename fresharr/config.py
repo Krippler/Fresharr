@@ -92,6 +92,9 @@ class Config:
     # Global filters / limits
     min_year: int = 0
     max_items_per_run: int = 20
+    # Back-catalog mode: sources surface the highest-rated titles back to
+    # min_year, instead of only what's new/trending.
+    back_catalog: bool = False
 
     # Radarr
     radarr_url: str = ""
@@ -178,6 +181,7 @@ class Config:
             mal_min_votes=_int("MAL_MIN_VOTES", 0),
             min_year=_int("MIN_YEAR", 0),
             max_items_per_run=_int("MAX_ITEMS_PER_RUN", 20),
+            back_catalog=_bool("BACK_CATALOG", False),
             radarr_url=_str("RADARR_URL"),
             radarr_api_key=_str("RADARR_API_KEY"),
             radarr_quality_profile=_str("RADARR_QUALITY_PROFILE"),

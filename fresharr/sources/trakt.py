@@ -33,6 +33,9 @@ class TraktSource:
                            TV: config.trakt_min_rating_tv}
         self.min_votes = config.trakt_min_votes
         self.limit = config.trakt_limit
+        # Back catalog uses the all-time "popular" lists (ranked by rating);
+        # the default is "trending" (what's being watched right now).
+        self.list_name = "popular" if config.back_catalog else "trending"
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": USER_AGENT,
@@ -42,17 +45,18 @@ class TraktSource:
         })
 
     def fetch(self) -> list[MediaItem]:
-        items = (self._trending("movies", "movie", MOVIE)
-                 + self._trending("shows", "show", TV))
-        log.info("Trakt: %d trending items pass rating (movies >= %.1f, "
-                 "TV >= %.1f)", len(items), self.min_rating[MOVIE],
+        items = (self._fetch_list("movies", "movie", MOVIE)
+                 + self._fetch_list("shows", "show", TV))
+        log.info("Trakt: %d %s items pass rating (movies >= %.1f, TV >= %.1f)",
+                 len(items), self.list_name, self.min_rating[MOVIE],
                  self.min_rating[TV])
         return items
 
-    def _trending(self, endpoint: str, key: str, media_type: str) -> list[MediaItem]:
+    def _fetch_list(self, endpoint: str, key: str, media_type: str) -> list[MediaItem]:
+        path = f"{endpoint}/{self.list_name}"
         try:
             resp = self.session.get(
-                f"{API_BASE}/{endpoint}/trending",
+                f"{API_BASE}/{path}",
                 params={"extended": "full", "limit": self.limit},
                 timeout=30,
             )
@@ -61,23 +65,23 @@ class TraktSource:
         except requests.HTTPError as exc:
             code = exc.response.status_code if exc.response is not None else None
             if code == 403:
-                log.warning("Trakt %s/trending returned 403 Forbidden - the "
-                            "Client ID looks wrong. Paste your app's *Client ID* "
-                            "(not the Client Secret) from "
-                            "trakt.tv/oauth/applications.", endpoint)
+                log.warning("Trakt %s returned 403 Forbidden - the Client ID "
+                            "looks wrong. Paste your app's *Client ID* (not the "
+                            "Client Secret) from trakt.tv/oauth/applications.", path)
             elif code == 429:
-                log.warning("Trakt %s/trending rate-limited (429); it will "
-                            "recover on the next run.", endpoint)
+                log.warning("Trakt %s rate-limited (429); it will recover on "
+                            "the next run.", path)
             else:
-                log.warning("Trakt %s/trending failed: %s", endpoint, exc)
+                log.warning("Trakt %s failed: %s", path, exc)
             return []
         except (requests.RequestException, ValueError) as exc:
-            log.warning("Trakt %s/trending failed: %s", endpoint, exc)
+            log.warning("Trakt %s failed: %s", path, exc)
             return []
 
         items = []
         for entry in data if isinstance(data, list) else []:
-            media = entry.get(key) if isinstance(entry, dict) else None
+            # "trending" wraps the media under its key; "popular" is a bare list.
+            media = entry.get(key) if isinstance(entry, dict) and key in entry else entry
             if not isinstance(media, dict):
                 continue
             item = self._parse_item(media, media_type)

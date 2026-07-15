@@ -30,35 +30,47 @@ class TmdbSource:
         self.released_within_days = config.tmdb_released_within_days
         self.include_movies = config.tmdb_movies
         self.include_tv = config.tmdb_tv
+        self.back_catalog = config.back_catalog
+        self.min_year = config.min_year
         self.session = requests.Session()
 
-    def fetch(self) -> list[MediaItem]:
+    def _date_window(self, gte_key: str, lte_key: str) -> dict:
+        today = date.today().isoformat()
+        if self.back_catalog:
+            # Whole range back to the minimum year (or all-time if unset).
+            window = {lte_key: today}
+            if self.min_year:
+                window[gte_key] = f"{self.min_year:04d}-01-01"
+            return window
         since = (date.today() - timedelta(days=self.released_within_days)).isoformat()
+        return {gte_key: since, lte_key: today}
+
+    def fetch(self) -> list[MediaItem]:
+        # In back-catalog mode sort by vote_count so the well-known, acclaimed
+        # titles surface first, rather than obscure films with a few high votes.
+        sort = "vote_count.desc" if self.back_catalog else "vote_average.desc"
         items: list[MediaItem] = []
         if self.include_movies:
             items.extend(self._discover(
-                "movie", MOVIE, self.min_rating_movies,
-                {"primary_release_date.gte": since,
-                 "primary_release_date.lte": date.today().isoformat()},
-            ))
+                "movie", MOVIE, self.min_rating_movies, sort,
+                self._date_window("primary_release_date.gte", "primary_release_date.lte")))
         if self.include_tv:
             items.extend(self._discover(
-                "tv", TV, self.min_rating_tv,
-                {"first_air_date.gte": since,
-                 "first_air_date.lte": date.today().isoformat()},
-            ))
-        log.info("TMDB: %d items (movies >= %.1f, TV >= %.1f, votes >= %d, "
-                 "released since %s)", len(items), self.min_rating_movies,
-                 self.min_rating_tv, self.min_votes, since)
+                "tv", TV, self.min_rating_tv, sort,
+                self._date_window("first_air_date.gte", "first_air_date.lte")))
+        log.info("TMDB: %d items (movies >= %.1f, TV >= %.1f, votes >= %d, %s)",
+                 len(items), self.min_rating_movies, self.min_rating_tv,
+                 self.min_votes, "back catalog" if self.back_catalog
+                 else f"released within {self.released_within_days} days")
         return items
 
     def _discover(self, kind: str, media_type: str, min_rating: float,
-                  date_params: dict) -> list[MediaItem]:
+                  sort: str, date_params: dict) -> list[MediaItem]:
         collected: list[MediaItem] = []
         for page in range(1, MAX_PAGES + 1):
             params = {
                 "api_key": self.api_key,
-                "sort_by": "vote_average.desc",
+                "sort_by": sort,
                 "vote_average.gte": min_rating,
                 "vote_count.gte": self.min_votes,
                 "include_adult": "false",

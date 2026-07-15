@@ -307,6 +307,10 @@ INDEX_HTML = """<!doctype html>
   .opt { display: flex; flex-direction: column; gap: .2rem; }
   .opt > span { font-size: .75rem; color: #8b96a5; }
   .opt small { color: #6b7684; font-size: .72rem; }
+  .optbool { flex-direction: row; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .optbool input { accent-color: #2f6b3d; width: 16px; height: 16px; }
+  .optbool > span { font-size: .85rem; color: #d7dee6; }
+  .optbool small { flex-basis: 100%; margin-left: 1.5rem; }
   /* Collapsible connection rows: only the name and connection status show
      until the row is expanded, mirroring the discovery-site rows. */
   .conn-row { border-top: 1px solid #232b34; }
@@ -691,6 +695,14 @@ function optionInput(opt) {
       <small>${hint}</small>
     </label>`;
   }
+  if (opt.type === "bool") {
+    const on = opt.value === true || opt.value === "true" || opt.value === 1;
+    return `<label class="opt optbool">
+      <input type="checkbox" data-opt="${opt.key}" ${on ? "checked" : ""}>
+      <span>${escapeHtml(opt.label)}</span>
+      ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
+    </label>`;
+  }
   const type = opt.type === "secret" ? "password"
              : (opt.type === "str" ? "text" : "number");
   const numberAttrs = type !== "number" ? "" :
@@ -748,10 +760,11 @@ async function loadArrChoices(app, isRetry) {
 function wireOptionInputs() {
   document.querySelectorAll("[data-opt]").forEach(input => {
     input.addEventListener("change", async () => {
+      const value = input.type === "checkbox" ? input.checked : input.value;
       try {
         await api("/api/settings", {method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({options: {[input.dataset.opt]: input.value}})});
+          body: JSON.stringify({options: {[input.dataset.opt]: value}})});
         toast("Saved");
         // A changed URL or API key invalidates the profile/folder dropdowns
         const conn = input.dataset.opt.match(/^(radarr|sonarr)_(url|api_key)$/);

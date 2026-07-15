@@ -57,6 +57,9 @@ OPTION_DEFS: list[OptionDef] = [
               "Cap per run", min=1, max=500),
     OptionDef("min_year", "Minimum release year", GENERAL, "int",
               "0 = no limit", min=0, max=2100),
+    OptionDef("back_catalog", "Include older titles (back catalog)", GENERAL, "bool",
+              "Also surface highly-rated titles back to the minimum year, "
+              "not just new releases"),
     OptionDef("arr_timeout", "Radarr/Sonarr timeout (s)", GENERAL, "int",
               "Time to allow large libraries to respond", min=30, max=1800),
     # Per-site thresholds and keys
@@ -106,6 +109,10 @@ def validate_option(defn: OptionDef, value):
     override and fall back to the environment/default'."""
     from .settings import SettingsError  # avoid import cycle at module load
 
+    if defn.type == "bool":
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
     if defn.type in ("str", "secret"):

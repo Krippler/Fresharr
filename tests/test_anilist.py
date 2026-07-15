@@ -71,6 +71,23 @@ def test_romaji_used_when_no_english_title(monkeypatch):
     assert items[0].alt_titles == ()
 
 
+def test_back_catalog_uses_score_sort_and_year_floor(monkeypatch):
+    cfg = Config(radarr_url="http://x", radarr_api_key="k",
+                 back_catalog=True, min_year=2020)
+    source = AniListSource(cfg)
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        captured.update(json or {})
+        return FakeResponse(ANILIST_RESPONSE)
+
+    monkeypatch.setattr(source.session, "post", fake_post)
+    source.fetch()
+    assert "SCORE_DESC" in captured["query"]
+    assert "TRENDING_DESC" not in captured["query"]
+    assert captured["variables"]["start"] == 20200000  # FuzzyDateInt for 2020
+
+
 def test_api_change_degrades_gracefully(monkeypatch):
     source = make_source()
     monkeypatch.setattr(source.session, "post",

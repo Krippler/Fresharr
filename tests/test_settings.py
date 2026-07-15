@@ -151,6 +151,18 @@ def test_option_cleared_falls_back_to_env(tmp_path):
     assert "rt_min_critics_score" not in store.options()
 
 
+def test_bool_option_roundtrip(tmp_path):
+    from fresharr.config import Config
+    store = make_store(tmp_path)
+    store.update({"options": {"back_catalog": True}})
+    assert store.options()["back_catalog"] is True
+    assert store.apply_to(Config()).back_catalog is True
+    # Persists and can be turned back off.
+    assert make_store(tmp_path).apply_to(Config()).back_catalog is True
+    store.update({"options": {"back_catalog": False}})
+    assert make_store(tmp_path).apply_to(Config()).back_catalog is False
+
+
 def test_option_validation(tmp_path):
     store = make_store(tmp_path)
     with pytest.raises(SettingsError, match="Unknown option"):
