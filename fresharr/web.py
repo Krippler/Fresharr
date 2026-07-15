@@ -797,9 +797,15 @@ function layoutMasonry(force) {
     cols.push(c);
   }
 
-  // At full width each card goes to its assigned column (data-col), giving a
-  // deliberate layout; DOM order is preserved within each column.
-  if (n === 3) {
+  // One column: just stack every card in DOM order.
+  if (n === 1) {
+    cols[0].append(...cardEls);
+    container.replaceChildren(cols[0]);
+    return;
+  }
+
+  // Three columns: each card goes to its assigned column (data-col).
+  if (n >= 3) {
     cardEls.forEach(card => {
       const col = Math.min(Number(card.dataset.col) || 0, n - 1);
       cols[col].appendChild(card);
@@ -808,32 +814,28 @@ function layoutMasonry(force) {
     return;
   }
 
-  // Narrower widths pack by height for balance. Measure each card at its real
-  // column width first (a detached column reports offsetHeight 0, which is why
-  // balancing used to fall back to round-robin): stack them constrained to the
-  // target column width, read heights in one batch, then distribute.
+  // Two columns: keep the same card order but split the sequence in two at
+  // the point that best balances height, so reading down column 1 then
+  // column 2 follows the exact same order as one column. Measure each card
+  // at its real column width first (a detached column reports offsetHeight
+  // 0, which is why balancing used to fall back to round-robin).
   const colWidth = (container.clientWidth - (n - 1) * gap) / n;
   container.replaceChildren(...cardEls);
   container.style.display = "block";
   cardEls.forEach(c => { c.style.width = colWidth + "px"; });
-  const measured = cardEls.map(c => c.getBoundingClientRect().height);
+  const measured = cardEls.map(c => c.getBoundingClientRect().height + gap);
   cardEls.forEach(c => { c.style.width = ""; });
   container.style.display = "";
 
-  const heights = cols.map(() => 0);
-  // Tallest-first into the shortest column (longest-processing-time
-  // scheduling) gives the most even columns. Status is pinned to the first
-  // column so the summary stays top-left regardless.
-  const rest = cardEls.map((c, i) => i).slice(1)
-                      .sort((a, b) => measured[b] - measured[a]);
-  const place = idx => {
-    let mi = 0;
-    for (let i = 1; i < n; i++) if (heights[i] < heights[mi]) mi = i;
-    cols[mi].appendChild(cardEls[idx]);
-    heights[mi] += measured[idx] + gap;
-  };
-  place(0);            // Status card first, into column 0
-  rest.forEach(place);
+  const total = measured.reduce((a, b) => a + b, 0);
+  let prefix = 0, best = Infinity, split = 1;
+  for (let k = 1; k < cardEls.length; k++) {
+    prefix += measured[k - 1];
+    const worst = Math.max(prefix, total - prefix);
+    if (worst < best) { best = worst; split = k; }
+  }
+  cols[0].append(...cardEls.slice(0, split));
+  cols[1].append(...cardEls.slice(split));
   container.replaceChildren(...cols);
 }
 let resizeTimer = null;
