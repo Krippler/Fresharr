@@ -282,13 +282,19 @@ INDEX_HTML = """<!doctype html>
   .opt { display: flex; flex-direction: column; gap: .2rem; }
   .opt > span { font-size: .75rem; color: #8b96a5; }
   .opt small { color: #6b7684; font-size: .72rem; }
-  .conns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-           gap: 1.2rem; }
-  .conn h3 { font-size: .95rem; margin-bottom: .4rem; }
-  /* Show the state on its own line so a long failure reason wraps inside
-     the column instead of overflowing into the next one. */
-  .conn .state { display: block; font-size: .75rem; margin: .15rem 0 0;
-                 overflow-wrap: anywhere; }
+  /* Collapsible connection rows: only the name and connection status show
+     until the row is expanded, mirroring the discovery-site rows. */
+  .conn-row { border-top: 1px solid #232b34; }
+  .conn-row:first-of-type { border-top: none; }
+  .conn-head { display: flex; align-items: center; gap: .7rem;
+               padding: .6rem 0; cursor: pointer; }
+  .conn-head:hover .name { color: #fff; }
+  .conn-head .name { font-weight: 600; flex: 1; min-width: 0; }
+  .conn-row.open .chevron { transform: rotate(90deg); color: #8b96a5; }
+  .conn-body { display: none; padding: .1rem 0 .7rem 1.4rem; }
+  .conn-row.open .conn-body { display: block; }
+  .conn-head .state { flex: 0 1 auto; text-align: right; font-size: .75rem;
+                      margin: 0; overflow-wrap: anywhere; }
   .state.ok { color: #7bd88f; }
   .state.off { color: #6b7684; }
   .state.connecting { color: #d8b44a; }
@@ -371,13 +377,27 @@ INDEX_HTML = """<!doctype html>
 
   <div class="card">
     <h2>Connections</h2>
-    <p class="muted">Saved on blur, applied next run. Empty = use the env
-      default.</p>
-    <div class="conns">
-      <div class="conn"><h3>Radarr <span class="muted">(movies)</span><span class="state" id="radarr-state"></span></h3>
+    <div class="conn-row" data-conn="radarr">
+      <div class="conn-head">
+        <span class="chevron">&#9656;</span>
+        <span class="name">Radarr <span class="muted">(movies)</span></span>
+        <span class="state" id="radarr-state"></span>
+      </div>
+      <div class="conn-body">
+        <p class="muted">Saved on blur, applied next run. Empty = use the env
+          default.</p>
         <div class="optgrid" id="conn-radarr"></div>
       </div>
-      <div class="conn"><h3>Sonarr <span class="muted">(TV)</span><span class="state" id="sonarr-state"></span></h3>
+    </div>
+    <div class="conn-row" data-conn="sonarr">
+      <div class="conn-head">
+        <span class="chevron">&#9656;</span>
+        <span class="name">Sonarr <span class="muted">(TV)</span></span>
+        <span class="state" id="sonarr-state"></span>
+      </div>
+      <div class="conn-body">
+        <p class="muted">Saved on blur, applied next run. Empty = use the env
+          default.</p>
         <div class="optgrid" id="conn-sonarr"></div>
       </div>
     </div>
@@ -464,9 +484,7 @@ function render(o) {
   $("status").innerHTML = `
     <div><span class="k">Last run</span><span class="v">${fmtTime(lr && lr.last_run_at)}</span></div>
     <div><span class="k">Next run</span><span class="v">${o.running ? "running now" : fmtRelative(o.next_run_at, o.server_time)}</span></div>
-    <div><span class="k">Added last run</span><span class="v">${counts.added ?? (counts.would_add !== undefined ? counts.would_add + " (dry)" : "–")}</span></div>
-    <div><span class="k">Radarr</span><span class="v">${o.arr.radarr ? "configured" : "off"}</span></div>
-    <div><span class="k">Sonarr</span><span class="v">${o.arr.sonarr ? "configured" : "off"}</span></div>`;
+    <div><span class="k">Added last run</span><span class="v">${counts.added ?? (counts.would_add !== undefined ? counts.would_add + " (dry)" : "–")}</span></div>`;
   const errEl = $("lasterror");
   errEl.hidden = !(lr && lr.error);
   if (lr && lr.error) errEl.textContent = "Last run error: " + lr.error;
@@ -511,6 +529,17 @@ function render(o) {
   renderConnState("sonarr", o.arr.sonarr);
   wireOptionInputs();
 
+  // Expand/collapse a connection by clicking its header.
+  document.querySelectorAll(".conn-row").forEach(row => {
+    const name = row.dataset.conn;
+    row.classList.toggle("open", expandedConns.has(name));
+    row.querySelector(".conn-head").addEventListener("click", () => {
+      if (expandedConns.has(name)) expandedConns.delete(name);
+      else expandedConns.add(name);
+      row.classList.toggle("open");
+    });
+  });
+
   // Expand/collapse a site by clicking its header (but not the toggle).
   document.querySelectorAll(".source-head").forEach(head => {
     head.addEventListener("click", ev => {
@@ -553,6 +582,7 @@ function escapeHtml(value) {
 
 const arrChoices = {radarr: null, sonarr: null};
 const expandedSources = new Set();  // sites whose settings are shown (persists across re-renders)
+const expandedConns = new Set();  // connections whose settings are shown (persists across re-renders)
 const openLangs = new Set();  // language dropdowns currently open (persists across re-renders)
 let lastOverview = null;
 
