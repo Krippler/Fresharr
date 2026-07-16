@@ -723,6 +723,8 @@ function optionInput(opt) {
 
 const arrRetryTimers = {radarr: null, sonarr: null};
 const arrFirstAttempt = {radarr: 0, sonarr: 0};
+const arrRetryDelay = {radarr: 4000, sonarr: 4000};  // backs off up to 30s
+const ARR_RETRY_MAX_MS = 30000;
 // Keep showing "connecting…" (not "failed") for this long while an app that
 // is configured hasn't answered yet - covers a slow or still-starting
 // Radarr/Sonarr so a transient timeout doesn't flash as a failure.
@@ -740,6 +742,7 @@ async function loadArrChoices(app, isRetry) {
   if (arrRetryTimers[app]) { clearTimeout(arrRetryTimers[app]); arrRetryTimers[app] = null; }
   if (!isRetry) {
     arrFirstAttempt[app] = Date.now();
+    arrRetryDelay[app] = 4000;              // fresh attempt: reset the backoff
     arrChoices[app] = null;                 // show "connecting…" on the first attempt
     if (lastOverview) render(lastOverview);
   }
@@ -757,8 +760,12 @@ async function loadArrChoices(app, isRetry) {
     updateRunButton();   // keep the button in sync even mid-edit
   // Configured but not up yet (still starting, slow, wrong port): keep polling
   // so it flips to "connected" on its own once it answers - no page reload.
+  // Back off up to 30s so a permanently-misconfigured app left on screen
+  // doesn't poll every few seconds forever.
   if (result.configured && !result.connected) {
-    arrRetryTimers[app] = setTimeout(() => loadArrChoices(app, true), 4000);
+    const delay = arrRetryDelay[app];
+    arrRetryDelay[app] = Math.min(delay * 2, ARR_RETRY_MAX_MS);
+    arrRetryTimers[app] = setTimeout(() => loadArrChoices(app, true), delay);
   }
 }
 

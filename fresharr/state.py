@@ -13,6 +13,12 @@ NOT_FOUND = "not_found"  # lookup returned no usable match (retried after a dela
 FAILED = "failed"        # add attempt errored (retried on every run)
 FILTERED = "filtered"    # excluded by a filter, e.g. original language (re-checked after a delay)
 
+# Cap on remembered items so the seen-state file can't grow without bound over
+# a long-running install. When exceeded, the oldest entries are dropped; that
+# only costs a re-lookup if such a title ever reappears in discovery (the *arr
+# still reports it as already in the library), so correctness is unaffected.
+MAX_ENTRIES = 10000
+
 
 class State:
     """Persistent record of items Fresharr has already handled, so restarts
@@ -35,7 +41,19 @@ class State:
             log.warning("Could not read state file %s (%s); starting fresh", self.path, exc)
             self._items = {}
 
+    def _prune(self) -> None:
+        """Keep the most-recently-touched entries, drop the oldest."""
+        if len(self._items) <= MAX_ENTRIES:
+            return
+        before = len(self._items)
+        kept = sorted(self._items.items(),
+                      key=lambda kv: kv[1].get("at", 0), reverse=True)[:MAX_ENTRIES]
+        self._items = dict(kept)
+        log.info("State file reached %d entries; pruned %d oldest to cap at %d",
+                 before, before - MAX_ENTRIES, MAX_ENTRIES)
+
     def save(self) -> None:
+        self._prune()
         directory = os.path.dirname(self.path) or "."
         os.makedirs(directory, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".state-", suffix=".json")

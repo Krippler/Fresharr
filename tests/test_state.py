@@ -2,7 +2,7 @@ import json
 import time
 
 from fresharr import state as state_mod
-from fresharr.state import State
+from fresharr.state import MAX_ENTRIES, State
 
 
 def test_roundtrip(tmp_path):
@@ -54,6 +54,21 @@ def test_save_creates_parent_dirs(tmp_path):
     state.record("k", state_mod.ADDED, "T")
     state.save()
     assert json.loads(path.read_text())["items"]["k"]["status"] == state_mod.ADDED
+
+
+def test_state_is_capped_keeping_newest(tmp_path):
+    path = tmp_path / "state.json"
+    state = State(str(path))
+    now = int(time.time())
+    # One over the cap; the oldest single entry should be pruned on save.
+    for i in range(MAX_ENTRIES + 1):
+        state._items[f"movie:film-{i}:2020"] = {
+            "status": state_mod.ADDED, "title": f"Film {i}", "at": now - i}
+    state.save()
+    items = json.loads(path.read_text())["items"]
+    assert len(items) == MAX_ENTRIES
+    assert "movie:film-0:2020" in items                      # newest kept (at=now)
+    assert f"movie:film-{MAX_ENTRIES}:2020" not in items     # oldest dropped
 
 
 def test_record_stores_content_kind(tmp_path):
