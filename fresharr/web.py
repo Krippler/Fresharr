@@ -99,10 +99,15 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
                                       and set(payload) <= {"card_layout"}):
             return jsonify({"error": "A run is in progress; settings are "
                             "locked until it finishes."}), 409
+        previous_interval = settings.run_interval_days
         try:
             snapshot = settings.update(payload)
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
+        # A changed cadence should move the next run immediately, not only
+        # after the following run completes.
+        if snapshot["run_interval_days"] != previous_interval:
+            scheduler.reschedule()
         log.info("Settings updated via web UI: interval %.1f day(s); sources: %s; "
                  "languages movie/tv/anime: %s / %s / %s",
                  snapshot["run_interval_days"],

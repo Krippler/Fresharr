@@ -10,9 +10,13 @@ class FakeScheduler:
     def __init__(self):
         self.running = False
         self.run_requests = 0
+        self.reschedules = 0
 
     def request_run(self):
         self.run_requests += 1
+
+    def reschedule(self):
+        self.reschedules += 1
 
     def next_run_at(self):
         return 2_000_000_000
@@ -71,6 +75,20 @@ def test_interval_update_and_clamp(env):
     data = client.post("/api/settings",
                        json={"run_interval_days": 0.1}).get_json()
     assert data["run_interval_days"] == 1.0  # clamped, not errored
+
+
+def test_interval_change_reschedules_next_run(env):
+    client, _, scheduler = env
+    assert scheduler.reschedules == 0
+    client.post("/api/settings", json={"run_interval_days": 7})
+    assert scheduler.reschedules == 1              # cadence changed -> rescheduled
+
+    client.post("/api/settings", json={"run_interval_days": 7})
+    assert scheduler.reschedules == 1              # unchanged -> no reschedule
+
+    # A non-interval change doesn't touch the schedule.
+    client.post("/api/settings", json={"movie_languages": ["en"]})
+    assert scheduler.reschedules == 1
 
 
 def test_language_settings(env):

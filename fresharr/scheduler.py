@@ -61,7 +61,19 @@ class Scheduler(threading.Thread):
         return 0.0  # never scheduled: due immediately
 
     def _schedule_next(self) -> None:
-        next_at = pick_next_run(time.time(), self.settings.run_interval_days)
+        self._persist_next(pick_next_run(time.time(), self.settings.run_interval_days))
+
+    def reschedule(self) -> None:
+        """Recompute the next run from the last run and the current interval.
+        Called when the cadence changes in the UI so 'next run' updates right
+        away instead of only after the following run."""
+        status = load_status(self.config.status_file)
+        last = status.get("last_run_at")
+        after = float(last) if isinstance(last, (int, float)) else time.time()
+        self._persist_next(pick_next_run(after, self.settings.run_interval_days))
+        self._wake.set()  # re-evaluate now in case the new time is already due
+
+    def _persist_next(self, next_at: float) -> None:
         try:
             status = load_status(self.config.status_file)
             status["next_run_at"] = int(next_at)

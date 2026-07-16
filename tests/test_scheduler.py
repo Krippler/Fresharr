@@ -1,4 +1,15 @@
-from fresharr.scheduler import JITTER_SECONDS, MIN_GAP_SECONDS, pick_next_run
+import time
+
+from fresharr.config import Config
+from fresharr.scheduler import (
+    JITTER_SECONDS,
+    MIN_GAP_SECONDS,
+    Scheduler,
+    pick_next_run,
+)
+from fresharr.settings import SettingsStore
+from fresharr.sources import SOURCE_DEFAULTS
+from fresharr.status import save_status
 
 DAY = 86400
 HOUR = 3600
@@ -26,3 +37,20 @@ def test_minimum_gap_enforced():
 
 def test_offset_from_given_time():
     assert pick_next_run(1_000_000, 1.0) >= 1_000_000 + MIN_GAP_SECONDS
+
+
+def test_reschedule_recomputes_next_run_from_last_run(tmp_path):
+    status_file = str(tmp_path / "status.json")
+    settings_file = str(tmp_path / "settings.json")
+    config = Config(status_file=status_file, settings_file=settings_file)
+    settings = SettingsStore(settings_file, SOURCE_DEFAULTS)
+    last = int(time.time()) - HOUR
+    save_status(status_file, {"last_run_at": last, "next_run_at": last + DAY})
+
+    scheduler = Scheduler(config, settings)
+    settings.update({"run_interval_days": 7})
+    scheduler.reschedule()
+
+    next_at = scheduler.next_run_at()
+    # Weekly cadence measured from the last run, within jitter.
+    assert last + 7 * DAY - JITTER_SECONDS <= next_at <= last + 7 * DAY + JITTER_SECONDS
