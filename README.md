@@ -1,12 +1,13 @@
 # Fresharr
 
-> [!WARNING]
-> **Early alpha.** Fresharr is brand new and largely untested in the wild — it
-> may not work as intended, and settings or behaviour may change between
-> versions without notice. Several discovery sites are scraped (they have no
-> public APIs) and can break whenever those sites change. Run it with
-> `DRY_RUN=true` first, watch the logs, and expect rough edges. Bug reports
-> are very welcome via [issues](https://github.com/krippler/fresharr/issues).
+> [!NOTE]
+> **Beta.** Fresharr is functional and in active use, but still maturing —
+> settings or behaviour may change between versions. Several discovery sites
+> are scraped (they have no public APIs) and can break whenever those sites
+> change; the API-backed sources (TMDB, Trakt, AniList, MyAnimeList) are the
+> most reliable. Run it with `DRY_RUN=true` first, watch the logs, and expect
+> the occasional rough edge. Bug reports are very welcome via
+> [issues](https://github.com/krippler/fresharr/issues).
 
 Fresharr discovers **new and highly rated movies, TV shows & anime** from Rotten
 Tomatoes, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and
