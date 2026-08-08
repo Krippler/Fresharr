@@ -20,33 +20,46 @@ Community Applications template.
 
 ## The web interface
 
-Fresharr serves a web UI on port `8383`. **All configuration lives here** —
-the only things set on the container itself are the port, the `/config` path,
-and `DRY_RUN`. In the UI you control:
+Fresharr serves a web UI on port `8383`. **All configuration lives here** — the
+Unraid template only asks for the port, the `/config` path and `DRY_RUN`
+(everything else is optional env-var defaults). In the UI you control:
 
-- **Connections** — Radarr and Sonarr URLs, API keys, quality profiles and
-  root folders. Once a connection works, the quality profile and root folder
-  become **dropdowns populated live from that app's API** — no typing names.
+- **Connections** — Radarr and Sonarr URLs, API keys, quality profiles, root
+  folders, an optional **anime root folder** (anime is added there instead of
+  the main folder), and an optional **tag** applied to everything Fresharr adds.
+  Once a connection works, the folder and profile fields become **dropdowns
+  populated live from that app's API** — no typing names. Each connection is a
+  collapsible row showing its live status (connecting / connected / failed).
   Fields save as you leave them and apply on the next run.
 - **Which discovery sites are used** — enable or disable each site individually
-  with a toggle, and set each site's score threshold and **minimum number of
-  reviews/ratings** (on sites that report one: TMDB, Trakt, Letterboxd,
-  MyAnimeList) right on its row. Sites that need an API key (TMDB, Trakt) take
-  it in the same place.
+  with a toggle, and set its thresholds right on its row. Sites covering both
+  movies and TV (Metacritic, TMDB, Trakt) have **separate thresholds for movies
+  and TV**. Sites that report a vote/rating count (TMDB, Trakt, Letterboxd,
+  MyAnimeList) also take a **minimum** for it. Sites that need an API key
+  (TMDB, Trakt) take it in the same place.
 - **The run schedule** — from once a day (the most frequent allowed) up to every
   2–3 days, weekly, twice a month, or monthly. The interval is a target, not an
   exact timer: each run happens at a **random time** around it (±6 hours), and
   never less than 18 hours after the previous run — so with the daily preset,
   runs land somewhere between 18 and 30 hours apart, at a different time of day
   each cycle. This randomization is built in and not configurable.
-- **Original language** — separate multi-select filters for **Movies**,
+- **Original language** — separate multi-select dropdowns for **Movies**,
   **TV shows** and **Anime**. Only titles whose original language is selected
-  get added; nothing selected means all languages. Applies where the source
-  reports a language (TMDB, Trakt, AniList, MyAnimeList); the scraped review
-  sites don't carry language metadata, so their titles always pass.
-- **Limits** — max additions per run and minimum release year.
-- **Run now** — trigger a discovery pass immediately.
-- Status: last/next run, what was added, and recent additions.
+  get added; nothing selected means all languages. Sources that report a
+  language are filtered up front, and every title is checked again against
+  Radarr/Sonarr's own metadata before it is added — so titles from the scraped
+  review sites (which carry no language data) are still caught.
+- **Limits** — max additions per run, minimum release year, a **back catalog**
+  toggle (see below), and the Radarr/Sonarr request timeout.
+- **Run now** — trigger a discovery pass immediately. It stays disabled until at
+  least one of Radarr/Sonarr is connected and at least one discovery site is on.
+- **Status** — last/next run and what was added, plus a **Recently added** list
+  (latest 15) labelled Movie / TV / Anime.
+
+Cards can be dragged into whatever arrangement you like; the layout is saved on
+the server, separately for the 3-, 2- and 1-column views. While a run is in
+progress settings are locked (and shown as such) so configuration can't change
+underneath it.
 
 Everything is stored in `/config/settings.json` and takes effect immediately —
 no container restart. Environment variables still work as *defaults* (handy for
@@ -59,11 +72,14 @@ falls back to the environment value.
 
 | Site | Needs | What it finds |
 |---|---|---|
-| **Rotten Tomatoes** (default on) | nothing | Certified-fresh theatrical releases filtered by Tomatometer / audience score. |
+| **Rotten Tomatoes** (default on) | nothing | Certified-fresh theatrical releases filtered by Tomatometer / audience score. Movies only. |
 | **Metacritic** | nothing | Recent movies & TV from the browse charts, filtered by Metascore. |
 | **TMDB** | free API key ([themoviedb.org](https://www.themoviedb.org/settings/api)) | Official API: recently released, highly rated titles. Most stable source, exact ID matches. **Recommended.** |
 | **Trakt** | free API app client ID ([trakt.tv](https://trakt.tv/oauth/applications)) | Trending movies & shows, filtered by Trakt rating. Exact ID matches. **Recommended.** |
-| **Letterboxd** (default off) | nothing | Films popular this week, filtered by Letterboxd star rating (movies only). Letterboxd rate-limits/blocks automated requests, so this source is unreliable — TMDB is the dependable alternative. |
+| **Letterboxd** | nothing | Films popular this week, filtered by Letterboxd star rating (movies only). Letterboxd rate-limits/blocks automated requests, so this source is unreliable — TMDB is the dependable alternative. |
+
+Only Rotten Tomatoes is enabled by default; every other site is off until you
+turn it on.
 
 ### Anime
 
@@ -75,6 +91,19 @@ falls back to the environment value.
 Anime handling: series are added to Sonarr with the **anime** series type
 (absolute episode numbering), anime films go to Radarr, and both the English and
 romaji titles are used when matching — whichever your indexers know the show by.
+If you set an **anime root folder** on a connection (e.g. `/tv/Anime`), anime is
+added there instead of the main root folder.
+
+### New releases vs. back catalog
+
+By default every site looks at what's **new or trending**, so almost everything
+found is a current release. Turn on **Include older titles (back catalog)** in
+Limits and the API-backed sites switch to their highest-rated titles going back
+to your **minimum release year** instead: TMDB searches the whole range (sorted
+by vote count, so well-known films surface first), Trakt uses its all-time
+popular lists, AniList sorts by score, MyAnimeList uses its all-time top lists,
+and Metacritic browses back to that year. Rotten Tomatoes and Letterboxd remain
+new-release only.
 
 Rotten Tomatoes, Metacritic and Letterboxd have no public APIs, so those sources
 parse the sites' own page data defensively — if a site changes its layout,
@@ -91,11 +120,22 @@ runs), Fresharr:
 1. Fetches candidate titles from every **enabled** discovery site.
 2. Filters by your score/year thresholds and language selections, and dedupes
    across sites.
-3. Looks each title up in Radarr (movies) / Sonarr (TV), skips anything already in
-   your library, and adds the rest with your chosen quality profile and root folder
-   (optionally triggering a search immediately).
-4. Remembers what it handled in `/config/state.json` so titles are never re-added,
-   even across restarts.
+3. Looks each title up in Radarr (movies) / Sonarr (TV). Anything already in your
+   library is skipped, anything whose original language isn't selected is skipped,
+   and the rest are added with your chosen quality profile, root folder and tag
+   (Radarr also triggers a search by default; Sonarr does not).
+4. Remembers what it handled in `/config/state.json` (capped at 10,000 entries,
+   oldest pruned) so it doesn't re-check the same titles every run. Titles that
+   had no match, or were filtered by language, are re-checked after
+   `RETRY_NOT_FOUND_DAYS`. Duplicates are detected from Radarr/Sonarr's own
+   lookup results, so nothing is added twice even if an entry is pruned.
+
+If Radarr or Sonarr stops responding mid-run, Fresharr stops sending to it after
+a few consecutive failures and defers the rest of its titles to the next run,
+rather than waiting out a timeout for every candidate. The other app keeps going.
+
+Runs happen inside the container on a background thread — **the web interface
+does not need to be open** for scheduled runs to fire.
 
 > **Tip:** start with `DRY_RUN=true` and watch the logs. Nothing is sent to
 > Radarr/Sonarr until you flip it to `false`.
@@ -129,7 +169,7 @@ See [docker-compose.example.yml](docker-compose.example.yml) for every option.
    copy [`unraid/fresharr.xml`](unraid/fresharr.xml) to
    `/boot/config/plugins/dockerMan/templates-user/` and add the container via
    **Docker → Add Container**). The template only asks for the port, appdata
-   path and Dry Run — everything else is configured in the web UI.
+   path, Dry Run and Log Level — everything else is configured in the web UI.
 2. Open the **WebUI** from the container's context menu and enter your
    Radarr/Sonarr URLs and API keys (Settings → General → API Key in each app),
    then pick your discovery sites, thresholds, languages and schedule.
@@ -141,12 +181,13 @@ The container runs as `nobody:users` (99:100), matching Unraid appdata conventio
 ## Configuration
 
 **Set in the web interface** (stored in `/config/settings.json`, applied
-without a restart): Radarr/Sonarr URLs, API keys, quality profiles and root
-folders (picked from live dropdowns); every site's score threshold and
-minimum review/rating count; TMDB API key and Trakt client ID; Rotten
-Tomatoes list paths; max additions per run; minimum release year;
-original-language filters for movies, TV and anime; per-site toggles; and
-the run schedule.
+without a restart): Radarr/Sonarr URLs, API keys, quality profiles, root
+folders, anime root folders and tags (picked from live dropdowns where
+applicable); every site's score thresholds — separate movie/TV values where the
+site covers both — and minimum review/rating counts; TMDB API key and Trakt
+client ID; Rotten Tomatoes list paths; max additions per run; minimum release
+year; the back-catalog toggle; the Radarr/Sonarr timeout; original-language
+filters for movies, TV and anime; per-site toggles; and the run schedule.
 
 **Environment variables** cover runtime behaviour and advanced tuning. Any
 UI-editable setting can *also* be provided as an env var (same names as before,
@@ -159,16 +200,18 @@ and the UI value overrides it.
 | `RUN_ONCE` | `false` | Single discovery pass, no web server, then exit (for external schedulers). |
 | `WEB_PORT` | `8383` | Port for the web interface. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `RETRY_NOT_FOUND_DAYS` | `7` | Re-try titles that had no Radarr/Sonarr match after this many days. |
+| `RETRY_NOT_FOUND_DAYS` | `7` | Re-check titles that had no match, or were filtered by language, after this many days. |
+| `ARR_TIMEOUT` | `300` | Seconds to allow Radarr/Sonarr to respond (large libraries can be slow). |
 | `RT_MAX_PAGES` | `2` | Rotten Tomatoes pages fetched per list (~30 titles per page). |
 | `TMDB_MIN_VOTES` | `50` | Minimum TMDB vote count (filters out obscure titles). |
-| `TMDB_RELEASED_WITHIN_DAYS` | `90` | TMDB: only titles released in the last N days. |
+| `TMDB_RELEASED_WITHIN_DAYS` | `90` | TMDB: only titles released in the last N days (ignored in back-catalog mode). |
 | `TMDB_MOVIES` / `TMDB_TV` | `true` | Toggle movie/TV discovery for the TMDB site. |
-| `TRAKT_LIMIT` | `40` | Trakt trending items fetched per media type. |
+| `TRAKT_LIMIT` | `40` | Trakt items fetched per media type. |
 | `LETTERBOXD_MAX_FILMS` | `30` | Popular films examined per run (each needs one page fetch). |
 | `LETTERBOXD_LIST` | `popular/this/week` | Letterboxd films list to read. |
 | `RADARR_MONITORED` / `SONARR_MONITORED` | `true` | Add titles as monitored. |
-| `RADARR_SEARCH_ON_ADD` / `SONARR_SEARCH_ON_ADD` | `true` | Trigger a search right after adding. |
+| `RADARR_SEARCH_ON_ADD` | `true` | Trigger a Radarr search right after adding. |
+| `SONARR_SEARCH_ON_ADD` | `false` | Trigger a Sonarr search right after adding (off so new series don't grab immediately). |
 | `RADARR_MINIMUM_AVAILABILITY` | `released` | `announced`, `inCinemas` or `released`. |
 
 ## Running from source
