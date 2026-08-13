@@ -238,9 +238,10 @@ INDEX_HTML = """<!doctype html>
   body { font: 15px/1.5 system-ui, -apple-system, sans-serif;
          background: #101418; color: #dde3ea; padding: 1.5rem; }
   .wrap { max-width: 2600px; margin: 0 auto; }
-  header { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1rem;
+  header { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem;
            flex-wrap: wrap; }
-  h1 { font-size: 1.5rem; color: #7bd88f; letter-spacing: .02em; }
+  header .logo { flex-shrink: 0; display: block; border-radius: 6px; }
+  h1 { font-size: 1.5rem; color: #7bd88f; letter-spacing: .02em; margin-right: .15rem; }
   .ver { color: #6b7684; font-size: .8rem; }
   /* Masonry via independent flex columns (count chosen in JS by width):
      each column stacks its own cards, so expanding one card only grows
@@ -392,6 +393,7 @@ INDEX_HTML = """<!doctype html>
 <body>
 <div class="wrap">
   <header>
+    <img class="logo" src="/favicon.svg" alt="" width="28" height="28">
     <h1>Fresharr</h1>
     <span class="ver" id="version"></span>
     <span class="dry" id="dryrun" hidden>DRY RUN &mdash; nothing is sent to Radarr/Sonarr</span>
