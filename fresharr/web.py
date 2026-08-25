@@ -69,7 +69,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             source["options"] = _option_payloads(effective, source["name"])
         return jsonify({
             "version": __version__,
-            "settings": settings.snapshot(),
+            "settings": _redacted_snapshot(settings),
             "language_options": LANGUAGE_OPTIONS,
             "sources": sources,
             "connections": {
@@ -116,7 +116,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
                  ", ".join(snapshot["movie_languages"]) or "all",
                  ", ".join(snapshot["tv_languages"]) or "all",
                  ", ".join(snapshot["anime_languages"]) or "all")
-        return jsonify(snapshot)
+        return jsonify(_redacted_snapshot(settings))
 
     @app.get("/api/arr/<app_name>/choices")
     def arr_choices(app_name: str):
@@ -172,6 +172,20 @@ def _short_error(exc: Exception) -> str:
     return text.split(":")[-1].strip()[:80] or "unreachable"
 
 
+_SECRET_KEYS = frozenset(d.key for d in OPTION_DEFS if d.type == "secret")
+
+
+def _redacted_snapshot(settings: SettingsStore) -> dict:
+    """The settings snapshot with stored API keys removed. The browser never
+    needs their values (see _option_payloads), so they don't leave the server."""
+    snapshot = dict(settings.snapshot())
+    options = snapshot.get("options")
+    if isinstance(options, dict):
+        snapshot["options"] = {k: v for k, v in options.items()
+                               if k not in _SECRET_KEYS}
+    return snapshot
+
+
 def _option_payloads(effective_config: Config, group: str) -> list[dict]:
     payloads = []
     for defn in OPTION_DEFS:
@@ -180,6 +194,13 @@ def _option_payloads(effective_config: Config, group: str) -> list[dict]:
         value = getattr(effective_config, defn.key, "")
         if defn.is_list and isinstance(value, list):
             value = ", ".join(value)
+        # Never send API keys back to the browser: the UI only needs to know
+        # whether one is stored. Submitting a new value replaces it; submitting
+        # an empty one clears it (falling back to the environment default).
+        is_set = None
+        if defn.type == "secret":
+            is_set = bool(str(value).strip())
+            value = ""
         payloads.append({
             "key": defn.key,
             "label": defn.label,
@@ -188,6 +209,7 @@ def _option_payloads(effective_config: Config, group: str) -> list[dict]:
             "min": defn.min,
             "max": defn.max,
             "value": value,
+            "is_set": is_set,
             "select": defn.select,
         })
     return payloads
@@ -716,10 +738,17 @@ function optionInput(opt) {
     `step="${opt.type === "float" ? "0.1" : "1"}"` +
     (opt.min != null ? ` min="${opt.min}"` : "") +
     (opt.max != null ? ` max="${opt.max}"` : "");
+  // Stored keys are never sent to the browser; show that one is saved and let
+  // the user type over it (or empty it to clear).
+  const secretHint = opt.type === "secret" && opt.is_set
+    ? ` placeholder="saved — type to replace"` : "";
+  const note = opt.type === "secret" && opt.is_set
+    ? "Saved. Leave blank to keep it, or type a new value to replace it."
+    : opt.description;
   return `<label class="opt"><span>${escapeHtml(opt.label)}</span>
-    <input type="${type}" data-opt="${opt.key}" ${numberAttrs}
+    <input type="${type}" data-opt="${opt.key}" ${numberAttrs}${secretHint}
            value="${escapeHtml(opt.value ?? "")}" autocomplete="off">
-    ${opt.description ? `<small>${escapeHtml(opt.description)}</small>` : ""}
+    ${note ? `<small>${escapeHtml(note)}</small>` : ""}
   </label>`;
 }
 

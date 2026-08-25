@@ -131,6 +131,41 @@ def test_card_layout_saved_per_width(env):
     assert resp.status_code == 400
 
 
+def test_secrets_are_never_sent_to_the_browser(env):
+    client, settings, _ = env
+    settings.update({"options": {"radarr_api_key": "SUPERSECRET",
+                                 "tmdb_api_key": "TMDBKEY"}})
+    body = client.get("/api/overview").get_data(as_text=True)
+    assert "SUPERSECRET" not in body      # not anywhere in the response
+    assert "TMDBKEY" not in body
+
+    overview = client.get("/api/overview").get_json()
+    key = next(o for o in overview["connections"]["radarr"]
+               if o["key"] == "radarr_api_key")
+    assert key["value"] == ""             # masked...
+    assert key["is_set"] is True          # ...but the UI knows one is stored
+
+    # An unset secret reports is_set False, and the stored value is untouched.
+    trakt = next(s for s in overview["sources"] if s["name"] == "trakt")
+    cid = next(o for o in trakt["options"] if o["key"] == "trakt_client_id")
+    assert cid["is_set"] is False
+    assert settings.options()["radarr_api_key"] == "SUPERSECRET"
+
+    # The settings POST response echoes a snapshot too - it must be clean.
+    resp = client.post("/api/settings", json={"run_interval_days": 3})
+    assert "SUPERSECRET" not in resp.get_data(as_text=True)
+    assert "radarr_api_key" not in resp.get_json()["options"]
+
+
+def test_card_layout_entry_count_is_bounded(env):
+    client, settings, _ = env
+    flood = [f"card-{i}" for i in range(5000)]   # all format-valid ids
+    assert client.post("/api/settings",
+                       json={"card_layout": {"1": [flood]}}).status_code == 200
+    stored = settings.card_layout["1"][0]
+    assert len(stored) <= 64                     # capped, not persisted wholesale
+
+
 def test_unknown_source_is_400(env):
     client, _, _ = env
     resp = client.post("/api/settings",

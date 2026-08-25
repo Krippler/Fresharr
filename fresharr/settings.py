@@ -23,6 +23,9 @@ MIN_INTERVAL_DAYS = 1.0  # never target more than a daily cadence
 _LANG_CODE_RE = re.compile(r"^[a-z]{2,3}$")
 _CARD_ID_RE = re.compile(r"^[a-z0-9-]{1,40}$")
 _CARD_LAYOUT_KEYS = ("1", "2", "3")
+# Generous next to the handful of real cards, but bounded so a malformed or
+# hostile request can't persist an unbounded layout into settings.json.
+_MAX_CARDS_PER_LAYOUT = 64
 
 # Rating thresholds that were a single knob before movies and TV got their
 # own: a legacy value seeds both new keys so saved settings keep working.
@@ -52,6 +55,8 @@ def _clean_one_layout(cols, n: int) -> list | None:
             return None
         col_ids: list[str] = []
         for card_id in col:
+            if len(seen) >= _MAX_CARDS_PER_LAYOUT:
+                break
             if (isinstance(card_id, str) and _CARD_ID_RE.match(card_id)
                     and card_id not in seen):
                 seen.add(card_id)
