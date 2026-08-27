@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/krippler/fresharr/issues</Support>
   <Project>https://github.com/krippler/fresharr</Project>
-  <Overview>Fresharr discovers new and highly rated movies, TV shows and anime from Rotten Tomatoes, IMDb, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and automatically adds them to Radarr and Sonarr (anime series get Sonarr's anime type). All configuration happens in the web interface: Radarr/Sonarr connections and API keys, score thresholds, original-language filters, per-site toggles and the run schedule. Runs happen at a random time around your chosen interval, never less than 18 hours apart. Start with DRY_RUN=true to preview what it would add before letting it loose.</Overview>
+  <Overview>Fresharr discovers new and highly rated movies, TV shows and anime from Rotten Tomatoes, Metacritic, Letterboxd, TMDB, Trakt, AniList and MyAnimeList, and adds them to Radarr and Sonarr automatically (anime series get Sonarr's anime type, and can go to their own root folder).&#13;&#13;All configuration happens in the web interface: connections and API keys, per-site toggles and score thresholds, original-language filters for movies/TV/anime, limits and the run schedule. Runs happen on a background thread at a random time around your chosen interval, never less than 18 hours apart - the web UI does not need to be open.&#13;&#13;Start with DRY_RUN=true to preview what it would add before letting it loose.</Overview>
   <Category>MediaApp:Video Tools: Downloaders:</Category>
   <Icon>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/icon.png</Icon>
   <TemplateURL>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/fresharr.xml</TemplateURL>
