@@ -396,9 +396,15 @@ INDEX_HTML = """<!doctype html>
   @keyframes spin { to { transform: rotate(360deg); } }
   #cards.locked { opacity: .96; }
   ul.recent { list-style: none; }
-  ul.recent li { padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
+  /* One line per title: the name truncates with an ellipsis rather than
+     wrapping around the timestamp. */
+  ul.recent li { display: flex; align-items: center; gap: .45rem;
+                 padding: .3rem 0; border-top: 1px solid #232b34; font-size: .9rem; }
   ul.recent li:first-child { border-top: none; }
-  ul.recent .when { color: #6b7684; font-size: .78rem; float: right; }
+  ul.recent .rtitle { flex: 1; min-width: 0; overflow: hidden;
+                      text-overflow: ellipsis; white-space: nowrap; }
+  ul.recent .when { color: #6b7684; font-size: .78rem; flex-shrink: 0; }
+  ul.recent .kind { margin-right: 0; flex-shrink: 0; }
   .kind { display: inline-block; font-size: .66rem; text-transform: uppercase;
           letter-spacing: .04em; padding: .05rem .4rem; border-radius: 99px;
           margin-right: .45rem; vertical-align: middle; border: 1px solid transparent; }
@@ -653,8 +659,10 @@ function render(o) {
   recent.innerHTML = (o.recent_additions && o.recent_additions.length)
     ? o.recent_additions.map(r => {
         const kind = kindLabel[r.kind] ? r.kind : "tv";
+        const title = escapeHtml(r.title);
         return `<li><span class="kind ${kind}">${kindLabel[kind]}</span>` +
-               `${escapeHtml(r.title)}<span class="when">${fmtTime(r.at)}</span></li>`;
+               `<span class="rtitle" title="${title}">${title}</span>` +
+               `<span class="when">${fmtTime(r.at)}</span></li>`;
       }).join("")
     : '<li class="muted">Nothing yet.</li>';
 
