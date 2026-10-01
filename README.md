@@ -164,6 +164,14 @@ Any UI setting can also be given as an environment variable (`RADARR_URL`,
 | `SONARR_SEARCH_ON_ADD` | `false` | Search for a series right after adding it. |
 | `RADARR_MINIMUM_AVAILABILITY` | `released` | `announced`, `inCinemas` or `released`. |
 
+## Versions
+
+`latest` is the newest release and `edge` tracks `main`; Unraid asks which at
+install. What changed is in
+[CHANGELOG.md](CHANGELOG.md) and on the
+[releases page](https://github.com/krippler/fresharr/releases); how releases are
+cut is in [PUBLISHING.md](PUBLISHING.md).
+
 ## Running from source
 
 ```bash

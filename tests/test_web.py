@@ -207,6 +207,15 @@ def test_health(env):
     assert client.get("/health").get_json()["status"] == "ok"
 
 
+def test_build_stamp_is_reported(env, monkeypatch):
+    # A non-release image reports the commit it was built from, not just the
+    # version it is based on.
+    client, _, _ = env
+    monkeypatch.setattr("fresharr.web.BUILD", "0.1.1-2-g54d4157")
+    assert client.get("/health").get_json()["version"] == "0.1.1-2-g54d4157"
+    assert client.get("/api/overview").get_json()["version"] == "0.1.1-2-g54d4157"
+
+
 def test_options_editable_via_api(env):
     client, settings, _ = env
     overview = client.get("/api/overview").get_json()

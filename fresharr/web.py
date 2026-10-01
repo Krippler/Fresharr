@@ -11,7 +11,7 @@ import time
 import requests
 from flask import Flask, jsonify, request
 
-from . import __version__
+from . import BUILD
 from .arr.radarr import Radarr
 from .arr.sonarr import Sonarr
 from .config import Config
@@ -57,7 +57,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": BUILD}
 
     @app.get("/api/overview")
     def overview():
@@ -68,7 +68,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
         for source in sources:
             source["options"] = _option_payloads(effective, source["name"])
         return jsonify({
-            "version": __version__,
+            "version": BUILD,
             "settings": _redacted_snapshot(settings),
             "language_options": LANGUAGE_OPTIONS,
             "sources": sources,

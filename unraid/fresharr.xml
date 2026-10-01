@@ -1,8 +1,16 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Fresharr</Name>
-  <Repository>ghcr.io/krippler/fresharr:latest</Repository>
+  <Repository>ghcr.io/krippler/fresharr</Repository>
   <Registry>https://ghcr.io/krippler/fresharr</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>The newest release</TagDescription>
+  </Branch>
+  <Branch>
+    <Tag>edge</Tag>
+    <TagDescription>Tracks main; may break</TagDescription>
+  </Branch>
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
@@ -14,17 +22,7 @@
   <TemplateURL>https://raw.githubusercontent.com/krippler/fresharr/main/unraid/fresharr.xml</TemplateURL>
   <WebUI>http://[IP]:[PORT:8383]/</WebUI>
   <Requires>A Radarr and/or Sonarr install to add titles to. Only one of the two is required. TMDB and Trakt are optional but recommended - both need a free API key entered in the web interface.</Requires>
-  <Changes>
-### 0.1.1
-- Security: stored API keys are no longer returned by the web API.
-- Anime can be routed to its own root folder; optional tag on everything added.
-- Separate movie/TV score thresholds; back-catalog mode for older titles.
-- Much faster runs on large libraries; a stalled Radarr/Sonarr no longer stalls the run.
-
-### 0.1.0
-- First beta. Discovery from seven sites, full web-interface configuration,
-  randomized scheduling, and original-language filters for movies, TV and anime.
-</Changes>
+  <Changes>Release notes: https://github.com/krippler/fresharr/releases</Changes>
   <ExtraParams/>
   <PostArgs/>
   <DonateText/>

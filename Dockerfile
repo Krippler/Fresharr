@@ -14,6 +14,11 @@ COPY pyproject.toml README.md LICENSE ./
 COPY fresharr ./fresharr
 RUN pip install --no-cache-dir .
 
+# Set by the publish workflow: the version on a release, the commit
+# (git describe) otherwise. Shown in the web interface and startup log.
+ARG FRESHARR_BUILD=
+ENV FRESHARR_BUILD=${FRESHARR_BUILD}
+
 # Unraid convention: run as nobody:users (99:100) so files in /config
 # stay manageable from the array.
 RUN mkdir -p /config && chown 99:100 /config

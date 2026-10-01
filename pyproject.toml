@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fresharr"
-version = "0.0.8"
+dynamic = ["version"]
 description = "Discovers new and highly rated movies & TV shows (Rotten Tomatoes, TMDB) and adds them to Radarr/Sonarr"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -22,6 +22,9 @@ dev = [
 
 [project.scripts]
 fresharr = "fresharr.__main__:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "fresharr.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["fresharr*"]

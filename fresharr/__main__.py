@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 
-from . import __version__
+from . import BUILD
 from .config import Config
 from .runner import run_once
 from .scheduler import Scheduler
@@ -24,7 +24,7 @@ def main() -> int:
     logging.getLogger().setLevel(config.log_level)
     settings = SettingsStore(config.settings_file, SOURCE_DEFAULTS)
     log.info("Fresharr %s starting (Radarr: %s, Sonarr: %s)",
-             __version__,
+             BUILD,
              "on" if config.radarr_enabled else "off",
              "on" if config.sonarr_enabled else "off")
 
