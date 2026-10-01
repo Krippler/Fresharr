@@ -4,7 +4,7 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
-## [Unreleased]
+## [0.1.2] — 2026-10-01
 
 ### Changed
 
