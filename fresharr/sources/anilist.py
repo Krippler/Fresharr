@@ -12,6 +12,7 @@ import logging
 import requests
 
 from ..config import Config
+from ..filters import Rules
 from ..models import MOVIE, TV, MediaItem
 
 log = logging.getLogger(__name__)
@@ -26,30 +27,35 @@ _FIELDS = """
       seasonYear
       startDate { year }
       countryOfOrigin
+      genres
 """
 
 # Default: what's trending now. Back catalog: highest-scored, optionally
 # floored at a start year.
 QUERY_TRENDING = """
-query ($page: Int, $perPage: Int) {
+query ($page: Int, $perPage: Int, $genreIn: [String], $genreNotIn: [String]) {
   Page(page: $page, perPage: $perPage) {
-    media(type: ANIME, sort: TRENDING_DESC) {%s}
+    media(type: ANIME, sort: TRENDING_DESC, genre_in: $genreIn,
+          genre_not_in: $genreNotIn) {%s}
   }
 }
 """ % _FIELDS
 
 QUERY_TOP = """
-query ($page: Int, $perPage: Int) {
+query ($page: Int, $perPage: Int, $genreIn: [String], $genreNotIn: [String]) {
   Page(page: $page, perPage: $perPage) {
-    media(type: ANIME, sort: SCORE_DESC) {%s}
+    media(type: ANIME, sort: SCORE_DESC, genre_in: $genreIn,
+          genre_not_in: $genreNotIn) {%s}
   }
 }
 """ % _FIELDS
 
 QUERY_TOP_SINCE = """
-query ($page: Int, $perPage: Int, $start: FuzzyDateInt) {
+query ($page: Int, $perPage: Int, $start: FuzzyDateInt, $genreIn: [String],
+       $genreNotIn: [String]) {
   Page(page: $page, perPage: $perPage) {
-    media(type: ANIME, sort: SCORE_DESC, startDate_greater: $start) {%s}
+    media(type: ANIME, sort: SCORE_DESC, startDate_greater: $start,
+          genre_in: $genreIn, genre_not_in: $genreNotIn) {%s}
   }
 }
 """ % _FIELDS
@@ -65,6 +71,7 @@ COUNTRY_LANGUAGE = {"JP": "ja", "CN": "zh", "TW": "zh", "KR": "ko"}
 
 class AniListSource:
     name = "anilist"
+    rules: dict = {}   # content kind -> filters.Rules, set by build_sources
 
     def __init__(self, config: Config):
         self.min_score = config.anilist_min_score
@@ -74,7 +81,9 @@ class AniListSource:
         self.session = requests.Session()
 
     def _query_and_vars(self) -> tuple[str, dict]:
-        variables = {"page": 1, "perPage": self.per_page}
+        # Unset variables are left out, which AniList treats as no filter.
+        variables = {"page": 1, "perPage": self.per_page,
+                     **self.rules.get("anime", Rules()).anilist_variables()}
         if not self.back_catalog:
             return QUERY_TRENDING, variables
         if self.min_year:
@@ -129,4 +138,5 @@ class AniListSource:
             alt_titles=alts,
             anime=True,
             language=COUNTRY_LANGUAGE.get(entry.get("countryOfOrigin"), "ja"),
+            genres=tuple(g for g in entry.get("genres") or () if isinstance(g, str)),
         )

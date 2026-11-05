@@ -71,6 +71,14 @@ always wins, and clearing a field falls back to the environment value.
   selected means all languages. Titles are checked against the source *and*
   against Radarr/Sonarr's own metadata, so foreign-language titles from the
   scraped sites get caught too.
+- **Genres & networks** — for movies, TV and anime separately, mark any genres
+  to **include** (a title matching any one of them passes) or **exclude**; for
+  TV and anime, the same for networks (Netflix, HBO, Disney+ and others, or
+  type in any name). TMDB, Trakt and AniList search with these directly, so
+  asking for documentaries finds documentaries. Every title is also checked
+  against Radarr/Sonarr's genres and Sonarr's network before it's added.
+  Movies have no network in Radarr, so networks apply to series only. A title
+  whose genre or network isn't known passes.
 - **Limits** — max additions per run, minimum release year, the back-catalog
   toggle, and the Radarr/Sonarr request timeout.
 - **Status** — last and next run, plus the 15 most recent additions labelled
@@ -125,14 +133,16 @@ browses back to that year. Rotten Tomatoes and Letterboxd stay new-release only.
 On each run, Fresharr:
 
 1. Fetches candidates from every enabled site.
-2. Applies your score, year and language filters, and dedupes across sites.
+2. Applies your score, year, language, genre and network filters, and dedupes
+   across sites.
 3. Looks each title up in Radarr (movies) / Sonarr (TV), skips anything already
    in your library or excluded by a filter, and adds the rest with your quality
    profile, root folder and tag. Radarr searches on add by default; Sonarr
    doesn't.
 4. Records what it handled in `/config/state.json` so it doesn't re-check the
-   same titles every run. Titles with no match, or filtered by language, are
-   retried after `RETRY_NOT_FOUND_DAYS`.
+   same titles every run. Titles with no match are retried after
+   `RETRY_NOT_FOUND_DAYS`; filtered titles are too, or on the next run if you
+   change the filters.
 
 Runs happen on a background thread inside the container — **the web interface
 doesn't need to be open**. If Radarr or Sonarr stops responding it's dropped

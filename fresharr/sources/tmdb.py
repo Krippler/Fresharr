@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import requests
 
 from ..config import Config
+from ..filters import Rules, tmdb_genre_names
 from ..models import MOVIE, TV, MediaItem
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ MAX_PAGES = 3
 
 class TmdbSource:
     name = "tmdb"
+    rules: dict = {}   # content kind -> filters.Rules, set by build_sources
 
     def __init__(self, config: Config):
         self.api_key = config.tmdb_api_key
@@ -76,6 +78,12 @@ class TmdbSource:
                 "include_adult": "false",
                 "page": page,
                 **date_params,
+                # Genre and network filters become part of the search itself,
+                # so asking for documentaries finds documentaries rather than
+                # filtering a general list down to nothing.
+                **self.rules.get("movie" if media_type == MOVIE else "tv",
+                                 Rules()).tmdb_params(media_type,
+                                                      series=media_type == TV),
             }
             try:
                 resp = self.session.get(f"{API_BASE}/discover/{kind}", params=params, timeout=30)
@@ -111,4 +119,5 @@ class TmdbSource:
             language=raw.get("original_language") or None,
             votes=raw.get("vote_count")
             if isinstance(raw.get("vote_count"), int) else None,
+            genres=tmdb_genre_names(raw.get("genre_ids"), media_type),
         )

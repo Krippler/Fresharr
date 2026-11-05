@@ -93,6 +93,10 @@ class MyAnimeListSource:
             alt_titles=alts,
             anime=True,
             language="ja",
+            # MAL splits these up; any of them can be what a filter names.
+            genres=tuple(g.get("name") for key in ("genres", "explicit_genres", "themes")
+                         for g in entry.get(key) or ()
+                         if isinstance(g, dict) and isinstance(g.get("name"), str)),
             votes=entry.get("scored_by")
             if isinstance(entry.get("scored_by"), int) else None,
         )

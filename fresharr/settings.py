@@ -26,6 +26,7 @@ _CARD_LAYOUT_KEYS = ("1", "2", "3")
 # Generous next to the handful of real cards, but bounded so a malformed or
 # hostile request can't persist an unbounded layout into settings.json.
 _MAX_CARDS_PER_LAYOUT = 64
+_MAX_FILTER_ENTRIES = 50
 
 # Rating thresholds that were a single knob before movies and TV got their
 # own: a legacy value seeds both new keys so saved settings keep working.
@@ -63,6 +64,43 @@ def _clean_one_layout(cols, n: int) -> list | None:
                 col_ids.append(card_id)
         out.append(col_ids)
     return out if seen else None
+
+
+def _valid_network(entry) -> bool:
+    from .filters import CUSTOM_NETWORK_RE, NETWORK_IDS
+    return isinstance(entry, str) and (
+        entry in NETWORK_IDS or bool(CUSTOM_NETWORK_RE.match(entry.strip())))
+
+
+def _clean_include_exclude(value, kinds, label: str, valid, normalise) -> dict:
+    """Validate a partial {kind: {"include": [...], "exclude": [...]}} update.
+    A request that puts one value on both sides is rejected rather than
+    guessed at."""
+    if not isinstance(value, dict):
+        raise SettingsError(f"{label} must be an object")
+    out: dict = {}
+    for kind, entry in value.items():
+        if kind not in kinds:
+            raise SettingsError(f"{label} kinds are {', '.join(kinds)} (got {kind!r})")
+        if not isinstance(entry, dict) or not set(entry) <= {"include", "exclude"}:
+            raise SettingsError(f"{label}.{kind} must be {{\"include\": [...], "
+                                f"\"exclude\": [...]}}")
+        cleaned = {}
+        for side, items in entry.items():
+            if not isinstance(items, list) or len(items) > _MAX_FILTER_ENTRIES:
+                raise SettingsError(
+                    f"{label}.{kind}.{side} must be a list of at most "
+                    f"{_MAX_FILTER_ENTRIES} entries")
+            for item in items:
+                if not valid(item):
+                    raise SettingsError(f"Unknown {label[:-8]} in {kind}: {item!r}")
+            cleaned[side] = sorted({normalise(i) for i in items})
+        both = set(cleaned.get("include", ())) & set(cleaned.get("exclude", ()))
+        if both:
+            raise SettingsError(f"{', '.join(sorted(both))} can't be both included "
+                                f"and excluded")
+        out[kind] = cleaned
+    return out
 
 
 class SettingsStore:
@@ -156,6 +194,34 @@ class SettingsStore:
         """Original-language codes for anime; empty means all."""
         return self._language_list("anime_languages")
 
+    def _include_exclude(self, key: str, kinds, clean) -> dict:
+        with self._lock:
+            raw = self._data.get(key, {})
+        out = {}
+        for kind in kinds:
+            entry = raw.get(kind) if isinstance(raw, dict) else None
+            entry = entry if isinstance(entry, dict) else {}
+            out[kind] = {side: clean(entry.get(side)) for side in ("include", "exclude")}
+        return out
+
+    @property
+    def genre_filters(self) -> dict:
+        """{"movie"|"tv"|"anime": {"include": [ids], "exclude": [ids]}}.
+        Empty include means any genre."""
+        from .filters import GENRE_IDS, GENRE_KINDS
+        return self._include_exclude(
+            "genre_filters", GENRE_KINDS,
+            lambda v: [g for g in v if g in GENRE_IDS] if isinstance(v, list) else [])
+
+    @property
+    def network_filters(self) -> dict:
+        """{"tv"|"anime": {"include": [...], "exclude": [...]}}: known network
+        ids, or names typed in for ones not in the list."""
+        from .filters import NETWORK_KINDS
+        return self._include_exclude(
+            "network_filters", NETWORK_KINDS,
+            lambda v: [n for n in v if _valid_network(n)] if isinstance(v, list) else [])
+
     def options(self) -> dict:
         """UI-set option overrides (Config attribute name -> value)."""
         with self._lock:
@@ -204,6 +270,8 @@ class SettingsStore:
             "movie_languages": self.movie_languages,
             "tv_languages": self.tv_languages,
             "anime_languages": self.anime_languages,
+            "genre_filters": self.genre_filters,
+            "network_filters": self.network_filters,
             "options": self.options(),
             "card_layout": self.card_layout,
         }
@@ -213,7 +281,8 @@ class SettingsStore:
 
         Accepts {"run_interval_days": <number>, "sources": {"<name>":
         {"enabled": <bool>}}, "movie_languages": [...], "tv_languages": [...],
-        "anime_languages": [...], "options": {...}}; any part may be omitted.
+        "anime_languages": [...], "genre_filters": {...}, "network_filters": {...},
+        "options": {...}}; any part may be omitted.
         Intervals below the daily minimum are clamped, unknown sources and
         malformed language codes are rejected.
         """
@@ -254,6 +323,18 @@ class SettingsStore:
                     raise SettingsError(
                         f"Invalid language code: {lang!r} (expected e.g. 'en', 'ja')")
             changes[key] = sorted(set(languages))
+
+        if "genre_filters" in payload:
+            from .filters import GENRE_IDS, GENRE_KINDS
+            changes["genre_filters"] = _clean_include_exclude(
+                payload["genre_filters"], GENRE_KINDS, "genre_filters",
+                lambda g: isinstance(g, str) and g in GENRE_IDS, lambda g: g)
+
+        if "network_filters" in payload:
+            from .filters import NETWORK_KINDS
+            changes["network_filters"] = _clean_include_exclude(
+                payload["network_filters"], NETWORK_KINDS, "network_filters",
+                _valid_network, lambda n: n.strip())
 
         if "options" in payload:
             from .options import OPTIONS_BY_KEY, validate_option
@@ -296,6 +377,20 @@ class SettingsStore:
             for key in ("movie_languages", "tv_languages", "anime_languages"):
                 if key in changes:
                     self._data[key] = changes[key]
+            for key in ("genre_filters", "network_filters"):
+                for kind, entry in changes.get(key, {}).items():
+                    store = self._data.get(key)
+                    if not isinstance(store, dict):
+                        store = self._data[key] = {}
+                    current = store.get(kind) if isinstance(store.get(kind), dict) else {}
+                    # Moving a value to one side takes it off the other.
+                    for side, values in entry.items():
+                        other = "exclude" if side == "include" else "include"
+                        if other not in entry:
+                            current[other] = [v for v in current.get(other, [])
+                                              if v not in values]
+                        current[side] = values
+                    store[kind] = current
             for key, value in changes.get("options", {}).items():
                 if value is None:  # cleared in the UI: fall back to env/default
                     self._data.get("options", {}).pop(key, None)

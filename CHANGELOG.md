@@ -4,6 +4,25 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
+## [Unreleased]
+
+### Added
+
+- **Genre and network filters,** in a new Genres & networks card. For movies,
+  TV and anime separately, mark genres to include (any one matches) or
+  exclude; for TV and anime, the same for networks — Netflix, HBO, Max, Hulu,
+  Disney+, Apple TV+, Prime Video, Showtime, NBC and 25 more, or type in any
+  other name. TMDB, Trakt and AniList search with these filters, so asking for
+  documentaries finds documentaries instead of filtering a trending list down
+  to nothing. Every title is checked again against Radarr/Sonarr's own genres
+  and Sonarr's network before it's added.
+
+### Changed
+
+- Titles skipped by a filter are looked at again on the next run after any
+  filter changes, rather than waiting out `RETRY_NOT_FOUND_DAYS`. This applies
+  to the language filter too.
+
 ## [0.1.2] — 2026-10-01
 
 ### Changed

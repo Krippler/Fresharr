@@ -4,10 +4,11 @@ import requests
 
 from .. import state
 from ..config import Config
+from ..filters import Rules
 from ..models import MediaItem
 from .base import (
     ArrClient,
-    excluded_language,
+    filter_reason,
     is_already_exists_error,
     lookup_terms,
     pick_best,
@@ -28,7 +29,7 @@ class Radarr(ArrClient):
         self.search_on_add = config.radarr_search_on_add
         self.minimum_availability = config.radarr_minimum_availability
 
-    def add(self, item: MediaItem, allowed_languages: list[str] = ()) -> str:
+    def add(self, item: MediaItem, rules: Rules | None = None) -> str:
         """Add a movie; returns a state status string."""
         match = None
         for term in lookup_terms(item):
@@ -45,10 +46,9 @@ class Radarr(ArrClient):
         if match.get("id"):
             return state.EXISTS
 
-        excluded = excluded_language(match, allowed_languages)
-        if excluded:
-            log.info("Radarr: skipping %s - original language %s is not in the "
-                     "selected languages", item.describe(), excluded)
+        reason = filter_reason(match, item, rules)
+        if reason:
+            log.info("Radarr: skipping %s - %s", item.describe(), reason)
             return state.FILTERED
 
         payload = dict(match)

@@ -154,6 +154,11 @@ SOURCE_DEFAULTS = {sdef.name: sdef.default_enabled for sdef in SOURCE_DEFS}
 def build_sources(config: Config, settings) -> list:
     """Instantiate every source that is enabled in the web UI and has its
     required configuration present."""
+    from ..filters import rules_for
+
+    # Sources that can search by genre/network read these; the rest ignore
+    # them and the runner filters what they return.
+    rules = {kind: rules_for(settings, kind) for kind in ("movie", "tv", "anime")}
     sources = []
     for sdef in SOURCE_DEFS:
         if not settings.is_enabled(sdef.name):
@@ -162,7 +167,9 @@ def build_sources(config: Config, settings) -> list:
             log.warning("Source %r is enabled but %s is not set; skipping",
                         sdef.name, sdef.requires)
             continue
-        sources.append(sdef.factory(config))
+        source = sdef.factory(config)
+        source.rules = rules
+        sources.append(source)
     return sources
 
 

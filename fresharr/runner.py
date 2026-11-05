@@ -8,6 +8,7 @@ from .arr.base import ArrError
 from .arr.radarr import Radarr
 from .arr.sonarr import Sonarr
 from .config import Config
+from .filters import Rules, rules_for
 from .models import MOVIE, TV, MediaItem
 from .settings import SettingsStore
 from .sources import build_sources
@@ -17,16 +18,19 @@ from .status import load_status, save_status
 log = logging.getLogger(__name__)
 
 
-def _allowed_languages(item: MediaItem, settings: SettingsStore) -> list[str]:
-    """The original-language allow-list (ISO codes) for an item's type - the
-    same movie/TV/anime split used when collecting candidates."""
-    if item.anime:
-        raw = getattr(settings, "anime_languages", None)
-    elif item.media_type == MOVIE:
-        raw = getattr(settings, "movie_languages", None)
-    else:
-        raw = getattr(settings, "tv_languages", None)
-    return [lang.lower() for lang in (raw or [])]
+def _rules_by_kind(settings: SettingsStore) -> dict[str, Rules]:
+    """The language/genre/network filters for movies, TV and anime."""
+    return {kind: rules_for(settings, kind) for kind in ("movie", "tv", "anime")}
+
+
+def _source_reason(item: MediaItem, rules: Rules) -> str | None:
+    """Why the discovery site's own data already rules a title out. Unknown
+    language, genres or network always pass; Radarr/Sonarr's metadata is
+    checked again at add time."""
+    if rules.languages and item.language \
+            and item.language.lower() not in rules.languages:
+        return f"language {item.language}"
+    return rules.genre_reason(item.genres) or rules.network_reason(item.network)
 
 
 def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
@@ -45,35 +49,14 @@ def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
     if not config.sonarr_enabled:
         items = [i for i in items if i.media_type != TV]
 
-    # Original-language filters (web UI settings): separate lists for
-    # movies, TV shows and anime. Items whose source doesn't report a
-    # language always pass - dropping them would silence entire sources
-    # like Rotten Tomatoes that carry no language metadata.
-    movie_languages = [lang.lower()
-                       for lang in getattr(settings, "movie_languages", []) or []]
-    tv_languages = [lang.lower()
-                    for lang in getattr(settings, "tv_languages", []) or []]
-    anime_languages = [lang.lower()
-                       for lang in getattr(settings, "anime_languages", []) or []]
-    if movie_languages or tv_languages or anime_languages:
-        def language_ok(item: MediaItem) -> bool:
-            if item.anime:
-                wanted = anime_languages
-            elif item.media_type == MOVIE:
-                wanted = movie_languages
-            else:
-                wanted = tv_languages
-            return not wanted or item.language is None \
-                or item.language.lower() in wanted
-
+    # Language, genre and network filters (web UI settings), kept separately
+    # for movies, TV shows and anime.
+    rules = _rules_by_kind(settings)
+    if any(r.active for r in rules.values()):
         before = len(items)
-        items = [i for i in items if language_ok(i)]
+        items = [i for i in items if not _source_reason(i, rules[i.content_kind])]
         if before != len(items):
-            log.info("Original-language filters (movies: %s; tv: %s; anime: %s): "
-                     "%d of %d candidates kept",
-                     ", ".join(movie_languages) or "any",
-                     ", ".join(tv_languages) or "any",
-                     ", ".join(anime_languages) or "any",
+            log.info("Language/genre/network filters: %d of %d candidates kept",
                      len(items), before)
 
     # Dedupe across sources/lists, keeping the first occurrence but preferring
@@ -102,6 +85,8 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
     error: str | None = None
 
     state = State(config.state_file, config.retry_not_found_days)
+    rules = _rules_by_kind(settings)
+    signatures = {kind: r.signature() for kind, r in rules.items()}
     clients: dict[str, Radarr | Sonarr] = {}
     if config.radarr_enabled:
         clients[MOVIE] = Radarr(config)
@@ -136,7 +121,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
             if item.media_type in deferred:
                 counts["skipped"] += 1
                 continue
-            if state.should_skip(item.key):
+            if state.should_skip(item.key, signatures[item.content_kind]):
                 counts["skipped"] += 1
                 continue
             if counts["added"] >= config.max_items_per_run:
@@ -149,7 +134,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                 counts["would_add"] += 1
                 continue
             try:
-                status = client.add(item, _allowed_languages(item, settings))
+                status = client.add(item, rules[item.content_kind])
                 consecutive_failures[item.media_type] = 0
             except ArrError as exc:
                 log.error("Configuration problem adding %s: %s", item.describe(), exc)
@@ -164,7 +149,8 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
                               f"the rest to the next run")
                     log.error("%s", reason)
                     deferred[item.media_type] = reason
-            state.record(item.key, status, item.title, item.content_kind)
+            state.record(item.key, status, item.title, item.content_kind,
+                         signatures[item.content_kind])
             counts[status] = counts.get(status, 0) + 1
             if status == state_mod.ADDED:
                 added_titles.append(item.title)
@@ -176,7 +162,7 @@ def run_once(config: Config, settings: SettingsStore) -> dict:
             error = "; ".join(dict.fromkeys(deferred.values()))
         log.info(
             "Run complete: %d added, %d already in library, %d not found, "
-            "%d filtered by language, %d failed, %d previously handled%s",
+            "%d filtered, %d failed, %d previously handled%s",
             counts["added"], counts["exists"], counts["not_found"],
             counts["filtered"], counts["failed"], counts["skipped"],
             f", {counts['would_add']} would be added (dry run)" if config.dry_run else "",

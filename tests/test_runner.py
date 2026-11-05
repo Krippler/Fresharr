@@ -221,8 +221,8 @@ def test_run_passes_language_filter_to_arr(tmp_path, monkeypatch):
         def load_library(self):
             pass
 
-        def add(self, item, allowed_languages=()):
-            captured["langs"] = list(allowed_languages)
+        def add(self, item, rules=None):
+            captured["langs"] = list(rules.languages)
             return state_mod.FILTERED   # pretend the arr metadata said it's foreign
 
     monkeypatch.setattr("fresharr.runner.Radarr", lambda config: CapturingRadarr(config))

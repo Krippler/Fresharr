@@ -28,6 +28,10 @@ class MediaItem:
     # Number of reviews/ratings/votes behind the score, where the source
     # reports one; None means unknown.
     votes: int | None = None
+    # Genre names and (for series) the network, where the source reports
+    # them; empty/None means unknown, which passes the genre/network filters.
+    genres: tuple[str, ...] = ()
+    network: str | None = None
 
     @property
     def content_kind(self) -> str:

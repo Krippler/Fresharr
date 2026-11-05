@@ -17,6 +17,7 @@ from .arr.sonarr import Sonarr
 from .config import Config
 from .options import GENERAL, OPTION_DEFS, RADARR, SONARR
 from .scheduler import Scheduler
+from .filters import GENRE_OPTIONS, NETWORK_OPTIONS
 from .settings import SettingsError, SettingsStore
 from .sources import describe_sources
 from .state import State
@@ -71,6 +72,8 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             "version": BUILD,
             "settings": _redacted_snapshot(settings),
             "language_options": LANGUAGE_OPTIONS,
+            "genre_options": GENRE_OPTIONS,
+            "network_options": NETWORK_OPTIONS,
             "sources": sources,
             "connections": {
                 "radarr": _option_payloads(effective, RADARR),
@@ -386,6 +389,21 @@ INDEX_HTML = """<!doctype html>
             border-radius: 6px; cursor: pointer; font-size: .85rem; color: #c3ccd6; }
   .dd-opt:hover { background: #232b34; }
   .dd-opt input { accent-color: #2f6b3d; }
+  .subhead { color: #c3ccd6; font-size: .8rem; font-weight: 600; margin-top: .9rem; }
+  .dd-opt.tri { cursor: default; }
+  /* Room for a name plus two buttons: grow leftwards over the row label. */
+  .dd-panel.tri-panel { left: auto; min-width: min(18rem, calc(100vw - 3rem)); }
+  .dd-opt.tri .tlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                        white-space: nowrap; }
+  .tri-btn { flex: 0 0 auto; border: 1px solid #333d49; background: #161c24; color: #8b96a5;
+             border-radius: 6px; padding: .1rem .45rem; font-size: .72rem; cursor: pointer; }
+  .tri-btn:hover { border-color: #4a5664; color: #d7dee6; }
+  .tri-btn.inc.on { background: #23452c; border-color: #3a8049; color: #b9e7c4; }
+  .tri-btn.exc.on { background: #4a2326; border-color: #8a3a40; color: #f0b8bc; }
+  .dd-add { display: flex; gap: .35rem; padding: .4rem .3rem .2rem; border-top: 1px solid #262e38;
+            margin-top: .3rem; }
+  .dd-add input { flex: 1; min-width: 0; }
+  .dd-add button { flex: 0 0 auto; font-size: .75rem; padding: .25rem .5rem; }
   .lockbanner { display: flex; align-items: center; gap: .55rem; margin-bottom: 1rem;
                 padding: .55rem .9rem; border-radius: 8px; font-size: .85rem;
                 background: #33320f; color: #e8dc8a; border: 1px solid #5a561a; }
@@ -512,6 +530,32 @@ INDEX_HTML = """<!doctype html>
     </div>
     <div class="langgroup"><span class="k">Anime</span>
       <div class="dropdown" id="langs-anime"></div>
+    </div>
+  </div>
+
+  <div class="card" data-col="2" data-card="filters">
+    <h2>Genres &amp; networks</h2>
+    <p class="muted">
+      <b>Include</b> keeps titles matching any one you pick; <b>exclude</b>
+      drops them. Nothing picked = everything. Checked against Radarr/Sonarr's
+      own metadata; networks are series-only.
+    </p>
+    <div class="subhead">Genres</div>
+    <div class="langgroup"><span class="k">Movies</span>
+      <div class="dropdown" id="genres-movie"></div>
+    </div>
+    <div class="langgroup"><span class="k">TV shows</span>
+      <div class="dropdown" id="genres-tv"></div>
+    </div>
+    <div class="langgroup"><span class="k">Anime</span>
+      <div class="dropdown" id="genres-anime"></div>
+    </div>
+    <div class="subhead">Networks</div>
+    <div class="langgroup"><span class="k">TV shows</span>
+      <div class="dropdown" id="networks-tv"></div>
+    </div>
+    <div class="langgroup"><span class="k">Anime</span>
+      <div class="dropdown" id="networks-anime"></div>
     </div>
   </div>
 
@@ -653,6 +697,12 @@ function render(o) {
   renderLanguages("langs-movie", "movie_languages", o);
   renderLanguages("langs-tv", "tv_languages", o);
   renderLanguages("langs-anime", "anime_languages", o);
+  for (const kind of ["movie", "tv", "anime"])
+    renderFilter("genres-" + kind, "genre_filters", kind, o.genre_options,
+                 o.settings.genre_filters[kind], "Any genre", false);
+  for (const kind of ["tv", "anime"])
+    renderFilter("networks-" + kind, "network_filters", kind, o.network_options,
+                 o.settings.network_filters[kind], "Any network", true);
 
   const recent = $("recent");
   const kindLabel = {movie: "Movie", tv: "TV", anime: "Anime"};
@@ -691,13 +741,16 @@ function escapeHtml(value) {
 const arrChoices = {radarr: null, sonarr: null};
 const expandedSources = new Set();  // sites whose settings are shown (persists across re-renders)
 const expandedConns = new Set();  // connections whose settings are shown (persists across re-renders)
-const openLangs = new Set();  // language dropdowns currently open (persists across re-renders)
+const openLangs = new Set();  // dropdowns currently open (persists across re-renders)
 let lastOverview = null;
 
-// Close any open language dropdown when clicking outside it.
+// Close any open dropdown when clicking outside it.
 document.addEventListener("click", ev => {
   if (!openLangs.size) return;
-  if (ev.target.closest(".dropdown")) return;
+  // The event's path, not ev.target.closest(): a picker redraws itself while
+  // handling the click, so by now the clicked button may be detached.
+  if (ev.composedPath().some(el => el.classList && el.classList.contains("dropdown")))
+    return;
   openLangs.clear();
   document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
 });
@@ -923,6 +976,128 @@ function renderLanguages(elementId, settingKey, o) {
       } catch (e) { toast(e.message, true); box.checked = !box.checked; }
     });
   });
+}
+
+// An include/exclude picker: each option can be included, excluded or left
+// alone. With allowCustom, names not in the list can be typed in (networks).
+//
+// Clicks change filterState straight away and saves go out one at a time, in
+// order, each carrying the whole selection. Building the next selection from
+// what was last drawn instead would let a quick second click, made before the
+// first save came back, overwrite it.
+const filterState = {};   // "genre_filters:movie" -> {include: Set, exclude: Set}
+const filterSaves = {};   // same key -> {queue: Promise, pending: count}
+
+function renderFilter(elementId, settingKey, kind, options, current, emptyText, allowCustom) {
+  const key = settingKey + ":" + kind;
+  const saves = filterSaves[key] || (filterSaves[key] = {queue: Promise.resolve(), pending: 0});
+  // While saves are in flight the local state is newer than the server's.
+  if (!saves.pending || !filterState[key])
+    filterState[key] = {include: new Set(current.include || []),
+                        exclude: new Set(current.exclude || [])};
+  const state = filterState[key];
+  const container = $(elementId);
+  const labelOf = new Map(options.map(o => [o.id, o.label]));
+  const label = v => labelOf.get(v) || v;
+  container.classList.toggle("open", openLangs.has(key));
+
+  const summary = () => {
+    const parts = [];
+    if (state.include.size) parts.push([...state.include].map(label).join(", "));
+    if (state.exclude.size) parts.push("not " + [...state.exclude].map(label).join(", "));
+    return parts.length ? parts.join(" · ") : emptyText;
+  };
+  const draw = () => {
+    // Typed-in names show up alongside the built-in list.
+    const all = [...options.map(o => o.id),
+                 ...[...state.include, ...state.exclude].filter(v => !labelOf.has(v)).sort()];
+    const set = state.include.size || state.exclude.size;
+    container.innerHTML = `
+      <button type="button" class="dd-trigger">
+        <span class="cur ${set ? "" : "none"}">${escapeHtml(summary())}</span>
+        <span class="caret">▾</span>
+      </button>
+      <div class="dd-panel tri-panel">
+        ${all.map(v => `
+          <div class="dd-opt tri" data-val="${escapeHtml(v)}">
+            <span class="tlabel">${escapeHtml(label(v))}</span>
+            <button type="button" class="tri-btn inc ${state.include.has(v) ? "on" : ""}"
+                    title="Include">Include</button>
+            <button type="button" class="tri-btn exc ${state.exclude.has(v) ? "on" : ""}"
+                    title="Exclude">Exclude</button>
+          </div>`).join("")}
+        ${allowCustom ? `
+          <div class="dd-add">
+            <input type="text" maxlength="40" placeholder="Other network…" autocomplete="off">
+            <button type="button" data-side="include">Include</button>
+            <button type="button" data-side="exclude">Exclude</button>
+          </div>` : ""}
+      </div>`;
+    wire();
+  };
+
+  // Put v on one side (taking it off the other), or take it off if it's there.
+  const toggle = (v, side) => {
+    const other = side === "include" ? "exclude" : "include";
+    if (state[side].has(v)) state[side].delete(v);
+    else { state[side].add(v); state[other].delete(v); }
+    const scroll = container.querySelector(".dd-panel")?.scrollTop || 0;
+    draw();
+    container.querySelector(".dd-panel").scrollTop = scroll;
+    save();
+  };
+
+  const save = () => {
+    saves.pending += 1;
+    const body = {[settingKey]: {[kind]: {include: [...state.include],
+                                          exclude: [...state.exclude]}}};
+    saves.queue = saves.queue.then(async () => {
+      try {
+        const snap = await api("/api/settings", {method: "POST",
+          headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+        if (lastOverview) lastOverview.settings[settingKey] = snap[settingKey];
+        if (saves.pending === 1) toast(summary());
+      } catch (e) {
+        toast(e.message, true);
+        // Fall back to what the server last confirmed.
+        saves.pending = 0;
+        if (lastOverview) renderFilter(elementId, settingKey, kind, options,
+          lastOverview.settings[settingKey][kind], emptyText, allowCustom);
+        return;
+      }
+      saves.pending = Math.max(0, saves.pending - 1);
+    });
+  };
+
+  const wire = () => {
+    container.querySelector(".dd-trigger").addEventListener("click", () => {
+      const nowOpen = !openLangs.has(key);
+      openLangs.clear();  // one dropdown open at a time
+      if (nowOpen) openLangs.add(key);
+      document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
+      container.classList.toggle("open", nowOpen);
+    });
+    container.querySelectorAll(".dd-opt.tri").forEach(row => {
+      row.querySelector(".inc").addEventListener("click", () => toggle(row.dataset.val, "include"));
+      row.querySelector(".exc").addEventListener("click", () => toggle(row.dataset.val, "exclude"));
+    });
+    if (!allowCustom) return;
+    const input = container.querySelector(".dd-add input");
+    container.querySelectorAll(".dd-add button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const typed = input.value.trim();
+        if (!typed) return;
+        // A typed name that is one of the listed networks uses that entry.
+        const known = options.find(o => o.label.toLowerCase() === typed.toLowerCase()
+                                        || o.id === typed.toLowerCase());
+        const v = known ? known.id : typed;
+        if (state[btn.dataset.side].has(v)) return;   // already there
+        toggle(v, btn.dataset.side);
+      });
+    });
+  };
+
+  draw();
 }
 
 async function refresh() {

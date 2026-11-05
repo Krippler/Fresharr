@@ -6,6 +6,7 @@ import requests
 from fresharr import state
 from fresharr.arr.radarr import Radarr
 from fresharr.config import Config
+from fresharr.filters import Rules
 from fresharr.models import MOVIE, MediaItem
 
 
@@ -140,7 +141,7 @@ def test_add_skips_when_language_not_allowed():
         ("GET", "/movie/lookup"): ITALIAN_LOOKUP,
     })
     # Filter allows only English/Japanese; the match is Italian -> filtered out.
-    assert radarr.add(ITEM, ["en", "ja"]) == state.FILTERED
+    assert radarr.add(ITEM, Rules(languages=("en", "ja"))) == state.FILTERED
     assert session.posts == []            # never attempted the add
 
 
@@ -152,7 +153,7 @@ def test_add_allows_matching_language():
         ("GET", "/rootfolder"): [{"path": "/movies"}],
         ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
     })
-    assert radarr.add(ITEM, ["it", "en"]) == state.ADDED  # Italian is allowed
+    assert radarr.add(ITEM, Rules(languages=("it", "en"))) == state.ADDED  # Italian is allowed
 
 
 def test_add_passes_unknown_language():
@@ -164,7 +165,7 @@ def test_add_passes_unknown_language():
         ("GET", "/rootfolder"): [{"path": "/movies"}],
         ("POST", "/movie"): {"title": "Dune: Part Two", "year": 2024, "tmdbId": 693134},
     })
-    assert radarr.add(ITEM, ["ja"]) == state.ADDED
+    assert radarr.add(ITEM, Rules(languages=("ja",))) == state.ADDED
 
 
 def test_add_skips_when_already_in_library():

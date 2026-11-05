@@ -160,6 +160,23 @@ def excluded_language(match: dict, allowed: list[str]) -> str | None:
     return None
 
 
+def filter_reason(match: dict, item, rules) -> str | None:
+    """Why a lookup match is filtered out by the user's language, genre or
+    network filters, or None if it passes. Radarr/Sonarr's metadata is
+    combined with what the discovery site reported, so a genre known to
+    either side counts."""
+    if rules is None or not rules.active:
+        return None
+    language = excluded_language(match, list(rules.languages))
+    if language:
+        return f"original language {language} is not in the selected languages"
+    genres = [*(match.get("genres") or ()), *item.genres]
+    reason = rules.genre_reason(genres)
+    if reason:
+        return reason
+    return rules.network_reason(match.get("network") or item.network)
+
+
 def is_already_exists_error(exc: requests.HTTPError) -> bool:
     """Radarr/Sonarr reply 400 with a validation message when the title is
     already in the library; treat that as success rather than failure."""

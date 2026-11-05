@@ -13,6 +13,7 @@ import requests
 
 from .. import __version__
 from ..config import Config
+from ..filters import Rules
 from ..models import MOVIE, TV, MediaItem
 
 log = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ USER_AGENT = f"Fresharr/{__version__} (+https://github.com/krippler/fresharr)"
 
 class TraktSource:
     name = "trakt"
+    rules: dict = {}   # content kind -> filters.Rules, set by build_sources
 
     def __init__(self, config: Config):
         self.min_rating = {MOVIE: config.trakt_min_rating_movies,
@@ -57,7 +59,9 @@ class TraktSource:
         try:
             resp = self.session.get(
                 f"{API_BASE}/{path}",
-                params={"extended": "full", "limit": self.limit},
+                params={"extended": "full", "limit": self.limit,
+                        **self.rules.get("movie" if media_type == MOVIE else "tv",
+                                         Rules()).trakt_params()},
                 timeout=30,
             )
             resp.raise_for_status()
@@ -111,4 +115,7 @@ class TraktSource:
             url=f"https://trakt.tv/{kind}/{slug}" if slug else None,
             language=media.get("language") or None,
             votes=media.get("votes") if isinstance(media.get("votes"), int) else None,
+            genres=tuple(g for g in media.get("genres") or () if isinstance(g, str)),
+            network=media.get("network") if isinstance(media.get("network"), str)
+            and media.get("network") else None,
         )

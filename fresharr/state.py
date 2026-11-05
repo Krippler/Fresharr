@@ -66,19 +66,24 @@ class State:
                 os.unlink(tmp_path)
             raise
 
-    def record(self, key: str, status: str, title: str, kind: str | None = None) -> None:
+    def record(self, key: str, status: str, title: str, kind: str | None = None,
+               filters: str | None = None) -> None:
         entry = {"status": status, "title": title, "at": int(time.time())}
         if kind:
             entry["kind"] = kind
+        if status == FILTERED and filters:
+            entry["filters"] = filters   # fingerprint of the filters that applied
         self._items[key] = entry
 
-    def should_skip(self, key: str) -> bool:
+    def should_skip(self, key: str, filters: str | None = None) -> bool:
         entry = self._items.get(key)
         if not entry:
             return False
         status = entry.get("status")
         if status in (ADDED, EXISTS):
             return True
+        if status == FILTERED and filters and entry.get("filters") != filters:
+            return False  # the filters have changed since: look again now
         if status in (NOT_FOUND, FILTERED):
             # Re-check periodically so broadening the language filter later
             # gives these titles another chance, without a lookup every run.
