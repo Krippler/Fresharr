@@ -4,6 +4,14 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
+## [Unreleased]
+
+### Fixed
+
+- **Phone-width layout:** a long "Last run error" (with a URL or connection
+  details in it) no longer pushes the page wider than the screen; it wraps
+  inside the Status card.
+
 ## [0.2.0] — 2026-11-05
 
 ### Added

@@ -326,7 +326,9 @@ INDEX_HTML = """<!doctype html>
              letter-spacing: .06em; }
   .stat .v { font-size: 1.05rem; font-weight: 600; }
   .muted { color: #6b7684; font-size: .85rem; }
-  .err { color: #e07a7a; }
+  /* Error text quotes URLs and exception reprs with no spaces to wrap at;
+     let them break anywhere rather than push the page sideways. */
+  .err { color: #e07a7a; overflow-wrap: anywhere; }
   .dry { color: #d8b44a; font-size: .8rem; }
   input[type=text], input[type=password], input[type=number] {
     font: inherit; background: #232b34; color: #dde3ea;
