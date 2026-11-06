@@ -19,18 +19,19 @@ log = logging.getLogger(__name__)
 
 
 def _rules_by_kind(settings: SettingsStore) -> dict[str, Rules]:
-    """The language/genre/network filters for movies, TV and anime."""
+    """The language/genre/network/studio filters for movies, TV and anime."""
     return {kind: rules_for(settings, kind) for kind in ("movie", "tv", "anime")}
 
 
 def _source_reason(item: MediaItem, rules: Rules) -> str | None:
     """Why the discovery site's own data already rules a title out. Unknown
-    language, genres or network always pass; Radarr/Sonarr's metadata is
+    language, genres, network or studio always pass; Radarr/Sonarr's metadata is
     checked again at add time."""
     language = normalize_language(item.language)
     if rules.languages and language and language not in rules.languages:
         return f"language {item.language}"
-    return rules.genre_reason(item.genres) or rules.network_reason(item.network)
+    return (rules.genre_reason(item.genres) or rules.network_reason(item.network)
+            or rules.studio_reason(item.studios, item.studio_confirmed))
 
 
 def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
@@ -56,7 +57,7 @@ def collect_items(config: Config, settings: SettingsStore) -> list[MediaItem]:
         before = len(items)
         items = [i for i in items if not _source_reason(i, rules[i.content_kind])]
         if before != len(items):
-            log.info("Language/genre/network filters: %d of %d candidates kept",
+            log.info("Language/genre/network/studio filters: %d of %d candidates kept",
                      len(items), before)
 
     # Dedupe across sources/lists, keeping the first occurrence but preferring

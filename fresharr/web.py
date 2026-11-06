@@ -17,7 +17,8 @@ from .arr.sonarr import Sonarr
 from .config import Config
 from .options import GENERAL, OPTION_DEFS, RADARR, SONARR
 from .scheduler import Scheduler
-from .filters import GENRE_OPTIONS, LANGUAGE_OPTIONS, NETWORK_OPTIONS
+from .filters import (GENRE_OPTIONS, LANGUAGE_OPTIONS, NETWORK_OPTIONS,
+                      STUDIO_OPTIONS)
 from .settings import SettingsError, SettingsStore
 from .sources import describe_sources
 from .state import State
@@ -54,6 +55,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             "language_options": LANGUAGE_OPTIONS,
             "genre_options": GENRE_OPTIONS,
             "network_options": NETWORK_OPTIONS,
+            "studio_options": STUDIO_OPTIONS,
             "sources": sources,
             "connections": {
                 "radarr": _option_payloads(effective, RADARR),
@@ -516,11 +518,11 @@ INDEX_HTML = """<!doctype html>
   </div>
 
   <div class="card" data-col="2" data-card="filters">
-    <h2>Genres &amp; networks</h2>
+    <h2>Genres, networks &amp; studios</h2>
     <p class="muted">
       <b>Include</b> keeps titles matching any one you pick; <b>exclude</b>
       drops them. Nothing picked = everything. Checked against Radarr/Sonarr's
-      own metadata; networks are series-only.
+      own metadata; networks are series-only, studios movies-only.
     </p>
     <div class="subhead">Genres</div>
     <div class="langgroup"><span class="k">Movies</span>
@@ -538,6 +540,10 @@ INDEX_HTML = """<!doctype html>
     </div>
     <div class="langgroup"><span class="k">Anime</span>
       <div class="dropdown" id="networks-anime"></div>
+    </div>
+    <div class="subhead">Studios</div>
+    <div class="langgroup"><span class="k">Movies</span>
+      <div class="dropdown" id="studios-movie"></div>
     </div>
   </div>
 
@@ -684,7 +690,9 @@ function render(o) {
                  o.settings.genre_filters[kind], "Any genre", false);
   for (const kind of ["tv", "anime"])
     renderFilter("networks-" + kind, "network_filters", kind, o.network_options,
-                 o.settings.network_filters[kind], "Any network", true);
+                 o.settings.network_filters[kind], "Any network", "Other network…");
+  renderFilter("studios-movie", "studio_filters", "movie", o.studio_options,
+               o.settings.studio_filters.movie, "Any studio", "Other studio…");
 
   const recent = $("recent");
   const kindLabel = {movie: "Movie", tv: "TV", anime: "Anime"};
@@ -961,7 +969,8 @@ function renderLanguages(elementId, settingKey, o) {
 }
 
 // An include/exclude picker: each option can be included, excluded or left
-// alone. With allowCustom, names not in the list can be typed in (networks).
+// alone. With allowCustom (the input's placeholder text), names not in the
+// list can be typed in (networks, studios).
 //
 // Clicks change filterState straight away and saves go out one at a time, in
 // order, each carrying the whole selection. Building the next selection from
@@ -1010,7 +1019,8 @@ function renderFilter(elementId, settingKey, kind, options, current, emptyText, 
           </div>`).join("")}
         ${allowCustom ? `
           <div class="dd-add">
-            <input type="text" maxlength="40" placeholder="Other network…" autocomplete="off">
+            <input type="text" maxlength="40" placeholder="${escapeHtml(allowCustom)}"
+                   autocomplete="off">
             <button type="button" data-side="include">Include</button>
             <button type="button" data-side="exclude">Exclude</button>
           </div>` : ""}

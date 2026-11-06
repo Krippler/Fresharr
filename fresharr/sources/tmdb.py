@@ -69,6 +69,11 @@ class TmdbSource:
     def _discover(self, kind: str, media_type: str, min_rating: float,
                   sort: str, date_params: dict) -> list[MediaItem]:
         collected: list[MediaItem] = []
+        # Genre, network and studio filters become part of the search itself,
+        # so asking for documentaries finds documentaries rather than
+        # filtering a general list down to nothing.
+        filters = self.rules.get("movie" if media_type == MOVIE else "tv",
+                                 Rules()).tmdb_params(media_type, series=media_type == TV)
         for page in range(1, MAX_PAGES + 1):
             params = {
                 "api_key": self.api_key,
@@ -78,12 +83,7 @@ class TmdbSource:
                 "include_adult": "false",
                 "page": page,
                 **date_params,
-                # Genre and network filters become part of the search itself,
-                # so asking for documentaries finds documentaries rather than
-                # filtering a general list down to nothing.
-                **self.rules.get("movie" if media_type == MOVIE else "tv",
-                                 Rules()).tmdb_params(media_type,
-                                                      series=media_type == TV),
+                **filters,
             }
             try:
                 resp = self.session.get(f"{API_BASE}/discover/{kind}", params=params, timeout=30)
@@ -93,14 +93,16 @@ class TmdbSource:
                 log.warning("TMDB discover/%s page %d failed: %s", kind, page, exc)
                 break
             for raw in data.get("results") or []:
-                item = self._parse_item(raw, media_type)
+                item = self._parse_item(raw, media_type,
+                                        studio_confirmed="with_companies" in filters)
                 if item:
                     collected.append(item)
             if page >= (data.get("total_pages") or 1):
                 break
         return collected
 
-    def _parse_item(self, raw: dict, media_type: str) -> MediaItem | None:
+    def _parse_item(self, raw: dict, media_type: str,
+                    studio_confirmed: bool = False) -> MediaItem | None:
         title = (raw.get("title") or raw.get("name") or "").strip()
         tmdb_id = raw.get("id")
         if not title or not tmdb_id:
@@ -120,4 +122,5 @@ class TmdbSource:
             votes=raw.get("vote_count")
             if isinstance(raw.get("vote_count"), int) else None,
             genres=tmdb_genre_names(raw.get("genre_ids"), media_type),
+            studio_confirmed=studio_confirmed,
         )

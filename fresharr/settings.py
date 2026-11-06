@@ -66,10 +66,21 @@ def _clean_one_layout(cols, n: int) -> list | None:
     return out if seen else None
 
 
-def _valid_network(entry) -> bool:
-    from .filters import CUSTOM_NETWORK_RE, NETWORK_IDS
+def _valid_name(entry, known_ids) -> bool:
+    """A built-in network/studio id, or a name typed in for one not listed."""
+    from .filters import CUSTOM_NETWORK_RE
     return isinstance(entry, str) and (
-        entry in NETWORK_IDS or bool(CUSTOM_NETWORK_RE.match(entry.strip())))
+        entry in known_ids or bool(CUSTOM_NETWORK_RE.match(entry.strip())))
+
+
+def _valid_network(entry) -> bool:
+    from .filters import NETWORK_IDS
+    return _valid_name(entry, NETWORK_IDS)
+
+
+def _valid_studio(entry) -> bool:
+    from .filters import STUDIO_IDS
+    return _valid_name(entry, STUDIO_IDS)
 
 
 def _clean_include_exclude(value, kinds, label: str, valid, normalise) -> dict:
@@ -222,6 +233,15 @@ class SettingsStore:
             "network_filters", NETWORK_KINDS,
             lambda v: [n for n in v if _valid_network(n)] if isinstance(v, list) else [])
 
+    @property
+    def studio_filters(self) -> dict:
+        """{"movie": {"include": [...], "exclude": [...]}}: known studio ids,
+        or names typed in for ones not in the list."""
+        from .filters import STUDIO_KINDS
+        return self._include_exclude(
+            "studio_filters", STUDIO_KINDS,
+            lambda v: [n for n in v if _valid_studio(n)] if isinstance(v, list) else [])
+
     def options(self) -> dict:
         """UI-set option overrides (Config attribute name -> value)."""
         with self._lock:
@@ -272,6 +292,7 @@ class SettingsStore:
             "anime_languages": self.anime_languages,
             "genre_filters": self.genre_filters,
             "network_filters": self.network_filters,
+            "studio_filters": self.studio_filters,
             "options": self.options(),
             "card_layout": self.card_layout,
         }
@@ -282,7 +303,7 @@ class SettingsStore:
         Accepts {"run_interval_days": <number>, "sources": {"<name>":
         {"enabled": <bool>}}, "movie_languages": [...], "tv_languages": [...],
         "anime_languages": [...], "genre_filters": {...}, "network_filters": {...},
-        "options": {...}}; any part may be omitted.
+        "studio_filters": {...}, "options": {...}}; any part may be omitted.
         Intervals below the daily minimum are clamped, unknown sources and
         malformed language codes are rejected.
         """
@@ -336,6 +357,12 @@ class SettingsStore:
                 payload["network_filters"], NETWORK_KINDS, "network_filters",
                 _valid_network, lambda n: n.strip())
 
+        if "studio_filters" in payload:
+            from .filters import STUDIO_KINDS
+            changes["studio_filters"] = _clean_include_exclude(
+                payload["studio_filters"], STUDIO_KINDS, "studio_filters",
+                _valid_studio, lambda n: n.strip())
+
         if "options" in payload:
             from .options import OPTIONS_BY_KEY, validate_option
             submitted = payload["options"]
@@ -377,7 +404,7 @@ class SettingsStore:
             for key in ("movie_languages", "tv_languages", "anime_languages"):
                 if key in changes:
                     self._data[key] = changes[key]
-            for key in ("genre_filters", "network_filters"):
+            for key in ("genre_filters", "network_filters", "studio_filters"):
                 for kind, entry in changes.get(key, {}).items():
                     store = self._data.get(key)
                     if not isinstance(store, dict):

@@ -32,6 +32,10 @@ class MediaItem:
     # them; empty/None means unknown, which passes the genre/network filters.
     genres: tuple[str, ...] = ()
     network: str | None = None
+    # Studio names where known, and whether the site's own search already
+    # limited results to the included studios (TMDB's with_companies).
+    studios: tuple[str, ...] = ()
+    studio_confirmed: bool = False
 
     @property
     def content_kind(self) -> str:

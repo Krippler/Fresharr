@@ -338,3 +338,79 @@ def test_site_language_codes_are_normalised(monkeypatch, settings):
     settings.update({"movie_languages": ["zh"]})
     config = Config(radarr_url="http://r", radarr_api_key="k")
     assert [i.title for i in collect_items(config, settings)] == ["HK Film"]
+
+
+# ── Studios ──────────────────────────────────────────────────────────────────
+
+def test_studio_names_match_tmdb_spellings_and_accents():
+    rules = Rules(include_studios=("lucasfilm", "pathe", "searchlight"))
+    assert rules.studio_reason(["Lucasfilm Ltd."]) is None      # TMDB's name
+    assert rules.studio_reason(["Pathe"]) is None                # no accent
+    assert rules.studio_reason(["Fox Searchlight Pictures"]) is None  # old name
+    assert "not in the selected studios" in rules.studio_reason(["A24"])
+    assert rules.studio_reason([None, ""]) is None               # unknown passes
+
+
+def test_studio_exclude_wins_and_any_include_is_enough():
+    rules = Rules(include_studios=("a24",), exclude_studios=("netflix",))
+    assert rules.studio_reason(["Plan B Entertainment", "A24"]) is None
+    assert "excluded" in rules.studio_reason(["A24", "Netflix"])
+    # A typed-in name works for studios not in the list.
+    assert "excluded" in Rules(exclude_studios=("Angel Studios",)) \
+        .studio_reason(["Angel Studios"])
+
+
+def test_studio_include_confirmed_by_the_sites_search():
+    rules = Rules(include_studios=("a24",))
+    assert "not in the selected" in rules.studio_reason(["Some Co-Producer"])
+    assert rules.studio_reason(["Some Co-Producer"], confirmed=True) is None
+    # Confirmation is about the include list only; an exclude still applies.
+    both = Rules(include_studios=("a24",), exclude_studios=("netflix",))
+    assert "excluded" in both.studio_reason(["Netflix"], confirmed=True)
+
+
+def test_tmdb_studio_params():
+    rules = Rules(include_studios=("a24", "neon"), exclude_studios=("disney",))
+    assert rules.tmdb_params(MOVIE, series=False) == {
+        "with_companies": "41077|90733|293354", "without_companies": "2"}
+    assert rules.tmdb_params(TV, series=True) == {}             # movies only
+    # A typed-in studio has no TMDB id: the include isn't pushed at all.
+    assert "with_companies" not in Rules(include_studios=("a24", "Angel Studios")) \
+        .tmdb_params(MOVIE, series=False)
+
+
+def test_tmdb_source_marks_studio_searched_items_confirmed(monkeypatch):
+    rules = {"movie": Rules(include_studios=("a24",))}
+    calls, items = _tmdb_params_sent(rules, monkeypatch, tmdb_tv=False)
+    assert calls[0]["with_companies"] == "41077|293354"
+    assert items[0].studio_confirmed
+
+
+def test_radarr_filters_on_its_studio():
+    from fresharr.arr.base import filter_reason
+    item = MediaItem(title="Film", media_type=MOVIE, source="rottentomatoes", year=2026)
+    match = {"title": "Film", "year": 2026, "studio": "Warner Bros. Pictures"}
+    assert "excluded" in filter_reason(match, item, Rules(exclude_studios=("warner-bros",)))
+    assert filter_reason(match, item, Rules(include_studios=("warner-bros",))) is None
+    assert "not in the selected" in filter_reason(
+        match, item, Rules(include_studios=("a24",)))
+
+
+def test_studio_settings_round_trip(settings):
+    settings.update({"studio_filters": {"movie": {"include": ["a24", "Angel Studios"]}}})
+    assert settings.studio_filters["movie"]["include"] == ["Angel Studios", "a24"]
+    assert rules_for(settings, "movie").studio_reason(["A24"]) is None
+    assert not rules_for(settings, "tv").include_studios
+    with pytest.raises(SettingsError, match="kinds"):
+        settings.update({"studio_filters": {"tv": {"include": ["a24"]}}})
+
+
+def test_no_studio_filter_keeps_existing_fingerprints():
+    # Filtered titles are re-checked when the fingerprint changes; adding the
+    # studio filter mustn't change it for anyone not using studios.
+    import hashlib
+    import json
+    rules = Rules(exclude_genres=frozenset({"reality"}))
+    old = hashlib.sha1(json.dumps([[], [], ["reality"], [], []]).encode()).hexdigest()[:12]
+    assert rules.signature() == old
+    assert Rules(exclude_studios=("a24",)).signature() != Rules().signature()

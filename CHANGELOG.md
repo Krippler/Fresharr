@@ -4,6 +4,20 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
+## [Unreleased]
+
+### Added
+
+- **Studio filter for movies,** in the Genres, networks & studios card:
+  include or exclude studios from a list of 83 (A24, Neon, Pixar, Marvel
+  Studios, Warner Bros., Universal, Blumhouse, Studio Ghibli and more), or type
+  in any other. TMDB searches by studio directly; every film is also checked
+  against Radarr's studio before it's added.
+
+### Fixed
+
+- Network and studio names match regardless of accents ("Pathe" finds Pathé).
+
 ## [0.2.2] — 2026-11-06
 
 ### Added

@@ -15,6 +15,7 @@ whole sources.
 import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from .models import MOVIE
@@ -258,6 +259,101 @@ _NETWORKS = [
     ("zdf", "ZDF", [31], []),
 ]
 
+# id, label, TMDB company ids, other spellings. Radarr reports a film's
+# studio as TMDB's first production company, so the spellings cover TMDB's
+# own names. Ids checked against each company's TMDB page (name and film
+# count); where TMDB has the same studio under more than one id (renamed, or
+# entered twice), all are listed.
+_STUDIOS = [
+    ("20th-century", "20th Century Studios / Fox", [127928, 25],
+     ["20th century studios", "20th century fox", "twentieth century fox"]),
+    ("a24", "A24", [41077, 293354], []),
+    ("aardman", "Aardman", [297], ["aardman animations"]),
+    ("amazon-mgm", "Amazon MGM Studios", [210099, 20580], ["amazon studios"]),
+    ("amblin", "Amblin Entertainment", [56], []),
+    ("annapurna", "Annapurna Pictures", [13184, 117057], []),
+    ("apple-studios", "Apple Studios", [194232], ["apple original films"]),
+    ("atomic-monster", "Atomic Monster", [76907], []),
+    ("bad-robot", "Bad Robot", [11461], ["bad robot productions"]),
+    ("bbc-film", "BBC Film", [288], ["bbc films"]),
+    ("bleecker-street", "Bleecker Street", [167986], []),
+    ("blue-sky", "Blue Sky Studios", [9383], []),
+    ("blumhouse", "Blumhouse Productions", [3172], ["blumhouse"]),
+    ("bones", "Bones", [2849], []),
+    ("castle-rock", "Castle Rock Entertainment", [97], []),
+    ("columbia", "Columbia Pictures", [5], []),
+    ("comix-wave", "CoMix Wave Films", [3756], []),
+    ("constantin", "Constantin Film", [47], []),
+    ("dc", "DC Studios", [184898, 128064, 9993],
+     ["dc films", "dc entertainment", "dc comics"]),
+    ("dimension", "Dimension Films", [7405], []),
+    ("dreamworks-animation", "DreamWorks Animation", [521], []),
+    ("dreamworks-pictures", "DreamWorks Pictures", [7], ["dreamworks", "dreamworks skg"]),
+    ("eone", "Entertainment One", [8147], ["eone"]),
+    ("film4", "Film4", [6705], ["film4 productions"]),
+    ("focus", "Focus Features", [10146], []),
+    ("gaumont", "Gaumont", [9], []),
+    ("ghost-house", "Ghost House Pictures", [768], []),
+    ("hammer", "Hammer Films", [1314], ["hammer film productions"]),
+    ("hollywood-pictures", "Hollywood Pictures", [915], []),
+    ("ifc-films", "IFC Films", [307], []),
+    ("illumination", "Illumination", [6704], ["illumination entertainment"]),
+    ("imagine", "Imagine Entertainment", [23], []),
+    ("kyoto-animation", "Kyoto Animation", [5438], []),
+    ("laika", "Laika", [11537], []),
+    ("legendary", "Legendary Pictures", [923], ["legendary entertainment"]),
+    ("lightstorm", "Lightstorm Entertainment", [574], []),
+    ("lionsgate", "Lionsgate", [1632, 35], ["lions gate films", "lionsgate films"]),
+    ("lucasfilm", "Lucasfilm", [1], ["lucasfilm ltd", "lucasfilm ltd."]),
+    ("madhouse", "Madhouse", [3464], []),
+    ("magnolia", "Magnolia Pictures", [1030], []),
+    ("mappa", "MAPPA", [21444], []),
+    ("marvel", "Marvel Studios", [420], []),
+    ("mgm", "Metro-Goldwyn-Mayer", [21], ["mgm"]),
+    ("miramax", "Miramax", [14], []),
+    ("neon", "Neon", [90733], []),
+    ("netflix", "Netflix", [178464, 185004], []),
+    ("new-line", "New Line Cinema", [12], []),
+    ("orion", "Orion Pictures", [41], []),
+    ("paramount", "Paramount Pictures", [4], []),
+    ("participant", "Participant", [6735], ["participant media"]),
+    ("pathe", "Pathé", [7981], []),
+    ("pixar", "Pixar", [3], ["pixar animation studios"]),
+    ("plan-b", "Plan B Entertainment", [81], []),
+    ("platinum-dunes", "Platinum Dunes", [2481], []),
+    ("production-ig", "Production I.G", [529, 166624], []),
+    ("regency", "Regency Enterprises", [508], []),
+    ("relativity", "Relativity Media", [7295], []),
+    ("roadside", "Roadside Attractions", [911], []),
+    ("screen-gems", "Screen Gems", [3287], []),
+    ("searchlight", "Searchlight Pictures", [127929, 43],
+     ["fox searchlight pictures", "fox searchlight"]),
+    ("skydance", "Skydance", [82819], ["skydance media", "skydance productions"]),
+    ("sony-animation", "Sony Pictures Animation", [2251], []),
+    ("sony-classics", "Sony Pictures Classics", [58], []),
+    ("studio-ghibli", "Studio Ghibli", [10342], ["ghibli"]),
+    ("studiocanal", "StudioCanal", [694, 218178, 106689], []),
+    ("stx", "STXfilms", [47729], ["stx entertainment", "stx films"]),
+    ("summit", "Summit Entertainment", [491], []),
+    ("sunrise", "Sunrise", [3153], []),
+    ("syncopy", "Syncopy", [9996], []),
+    ("toei", "Toei Animation", [5542], []),
+    ("toho", "Toho", [882], []),
+    ("touchstone", "Touchstone Pictures", [9195], []),
+    ("trigger", "Trigger", [50908], ["studio trigger"]),
+    ("tristar", "TriStar Pictures", [559], []),
+    ("ufotable", "ufotable", [5887], []),
+    ("united-artists", "United Artists", [60], []),
+    ("universal", "Universal Pictures", [33], []),
+    ("village-roadshow", "Village Roadshow Pictures", [79], []),
+    ("disney", "Walt Disney Pictures", [2], ["disney"]),
+    ("disney-animation", "Walt Disney Animation Studios", [6125, 158526], []),
+    ("warner-bros", "Warner Bros. Pictures", [174], ["warner bros", "warner bros."]),
+    ("wit-studio", "Wit Studio", [31058], []),
+    ("working-title", "Working Title Films", [10163, 221513], ["working title"]),
+]
+
+
 def _alphabetical(rows) -> list[dict]:
     return [{"id": r[0], "label": r[1]}
             for r in sorted(rows, key=lambda r: r[1].casefold())]
@@ -265,22 +361,29 @@ def _alphabetical(rows) -> list[dict]:
 
 GENRE_OPTIONS = _alphabetical(_GENRES)
 NETWORK_OPTIONS = _alphabetical(_NETWORKS)
+STUDIO_OPTIONS = _alphabetical(_STUDIOS)
 GENRE_IDS = frozenset(g[0] for g in _GENRES)
 NETWORK_IDS = frozenset(n[0] for n in _NETWORKS)
+STUDIO_IDS = frozenset(n[0] for n in _STUDIOS)
 
 # Filters are kept per content kind: genres for movies, TV and anime;
 # networks only for series (Radarr's movie metadata has no network).
 GENRE_KINDS = ("movie", "tv", "anime")
 NETWORK_KINDS = ("tv", "anime")
+# Studios: movies only. Sonarr has no studio for a series.
+STUDIO_KINDS = ("movie",)
 
-# A network not in the list above can be typed in by name.
+# A network or studio not in the lists above can be typed in by name.
 CUSTOM_NETWORK_RE = re.compile(r"^[\w .&+'!:()/-]{1,40}$")
 
 
 def _norm(text: str) -> str:
-    """Comparison form of a genre/network name: lowercase, '+' spelled out,
-    a trailing country tag like "(US)" dropped, punctuation removed."""
-    text = re.sub(r"\s*\([a-z]{2,3}\)\s*$", "", str(text).strip().lower())
+    """Comparison form of a name: lowercase, accents dropped ("Pathé" is
+    "pathe"), '+' spelled out, a trailing country tag like "(US)" dropped,
+    punctuation removed."""
+    text = unicodedata.normalize("NFKD", str(text).strip().lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"\s*\([a-z]{2,3}\)\s*$", "", text)
     text = text.replace("&", " and ").replace("+", " plus ")
     return re.sub(r"[^a-z0-9]+", "", text)
 
@@ -297,10 +400,13 @@ _GENRE_ALIASES = _build_alias_map(
     _GENRES, lambda g: [g[0], g[1], *g[4], *g[5], *g[6]])
 _NETWORK_ALIASES = _build_alias_map(
     _NETWORKS, lambda n: [n[0], n[1], *n[3]])
+_STUDIO_ALIASES = _build_alias_map(
+    _STUDIOS, lambda n: [n[0], n[1], *n[3]])
 
 _TMDB_MOVIE_GENRES = {g[0]: g[2] for g in _GENRES}
 _TMDB_TV_GENRES = {g[0]: g[3] for g in _GENRES}
 _TMDB_NETWORK = {n[0]: n[2] for n in _NETWORKS}
+_TMDB_COMPANY = {n[0]: n[2] for n in _STUDIOS}
 _TRAKT_GENRES = {g[0]: g[4] for g in _GENRES}
 _ANILIST_GENRES = {g[0]: g[5] for g in _GENRES}
 
@@ -322,18 +428,35 @@ def tmdb_genre_names(genre_ids, media_type: str) -> tuple[str, ...]:
     return tuple(sorted(g for g, ids in table.items() if wanted & set(ids)))
 
 
-def _network_keys(name: str) -> set[str]:
-    """What a network name matches: its canonical id if it's a known one,
-    and always its normalised text (so typed-in names still match)."""
+def _name_keys(name: str, aliases: dict) -> set[str]:
+    """What a network or studio name matches: its canonical id if it's a
+    known one, and always its normalised text (so typed-in names match)."""
     key = _norm(name)
-    return _NETWORK_ALIASES.get(key, set()) | {key}
+    return aliases.get(key, set()) | {key}
 
 
-def _setting_keys(entries) -> set[str]:
+def _setting_keys(entries, known_ids, aliases) -> frozenset:
     keys: set[str] = set()
     for entry in entries:
-        keys |= {entry} if entry in NETWORK_IDS else _network_keys(entry)
-    return keys
+        keys |= {entry} if entry in known_ids else _name_keys(entry, aliases)
+    return frozenset(keys)
+
+
+def _named_reason(what: str, names, include_keys, exclude_keys, aliases,
+                  confirmed: bool = False) -> str | None:
+    """Why a title with these network/studio names is filtered out, or None
+    if it passes. No known name passes. `confirmed` means the site's own
+    search already matched the include list."""
+    names = [n for n in names if isinstance(n, str) and n.strip()]
+    if not names or not (include_keys or exclude_keys):
+        return None
+    for name in names:
+        if _name_keys(name, aliases) & exclude_keys:
+            return f"{what} {name} is excluded"
+    if include_keys and not confirmed and not any(
+            _name_keys(name, aliases) & include_keys for name in names):
+        return f"{what} {', '.join(names)} is not in the selected {what}s"
+    return None
 
 
 @dataclass(frozen=True)
@@ -344,19 +467,27 @@ class Rules:
     exclude_genres: frozenset = frozenset()
     include_networks: tuple[str, ...] = ()
     exclude_networks: tuple[str, ...] = ()
-    _include_keys: frozenset = field(default=frozenset(), repr=False, compare=False)
-    _exclude_keys: frozenset = field(default=frozenset(), repr=False, compare=False)
+    include_studios: tuple[str, ...] = ()
+    exclude_studios: tuple[str, ...] = ()
+    _keys: dict = field(default_factory=dict, repr=False, compare=False)
 
     def __post_init__(self):
-        object.__setattr__(self, "_include_keys",
-                           frozenset(_setting_keys(self.include_networks)))
-        object.__setattr__(self, "_exclude_keys",
-                           frozenset(_setting_keys(self.exclude_networks)))
+        self._keys.update({
+            "include_networks": _setting_keys(self.include_networks, NETWORK_IDS,
+                                              _NETWORK_ALIASES),
+            "exclude_networks": _setting_keys(self.exclude_networks, NETWORK_IDS,
+                                              _NETWORK_ALIASES),
+            "include_studios": _setting_keys(self.include_studios, STUDIO_IDS,
+                                             _STUDIO_ALIASES),
+            "exclude_studios": _setting_keys(self.exclude_studios, STUDIO_IDS,
+                                             _STUDIO_ALIASES),
+        })
 
     @property
     def active(self) -> bool:
         return bool(self.languages or self.include_genres or self.exclude_genres
-                    or self.include_networks or self.exclude_networks)
+                    or self.include_networks or self.exclude_networks
+                    or self.include_studios or self.exclude_studios)
 
     def genre_reason(self, genres) -> str | None:
         """Why these genre names are filtered out, or None if they pass."""
@@ -373,22 +504,27 @@ class Rules:
 
     def network_reason(self, network: str | None) -> str | None:
         """Why this network is filtered out, or None if it passes."""
-        if not network or not (self._include_keys or self._exclude_keys):
-            return None
-        keys = _network_keys(network)
-        if keys & self._exclude_keys:
-            return f"network {network} is excluded"
-        if self._include_keys and not (keys & self._include_keys):
-            return f"network {network} is not in the selected networks"
-        return None
+        return _named_reason("network", [network], self._keys["include_networks"],
+                             self._keys["exclude_networks"], _NETWORK_ALIASES)
+
+    def studio_reason(self, studios, confirmed: bool = False) -> str | None:
+        """Why a film from these studios is filtered out, or None if it
+        passes. Any one of them matching the include list is enough."""
+        return _named_reason("studio", list(studios), self._keys["include_studios"],
+                             self._keys["exclude_studios"], _STUDIO_ALIASES,
+                             confirmed)
 
     def signature(self) -> str:
         """Short fingerprint, stored with filtered titles so a change to the
         filters gets them looked at again straight away."""
-        blob = json.dumps([sorted(self.languages), sorted(self.include_genres),
-                           sorted(self.exclude_genres),
-                           sorted(self.include_networks),
-                           sorted(self.exclude_networks)])
+        parts = [sorted(self.languages), sorted(self.include_genres),
+                 sorted(self.exclude_genres), sorted(self.include_networks),
+                 sorted(self.exclude_networks)]
+        # Only when set, so adding studio filters didn't change every
+        # existing fingerprint (and re-check every filtered title).
+        if self.include_studios or self.exclude_studios:
+            parts += [sorted(self.include_studios), sorted(self.exclude_studios)]
+        blob = json.dumps(parts)
         return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
     # ── Pushing filters down to the sites' own search ─────────────────────
@@ -417,6 +553,17 @@ class Rules:
                 all(n in _TMDB_NETWORK for n in self.include_networks):
             ids = sorted({i for n in self.include_networks for i in _TMDB_NETWORK[n]})
             params["with_networks"] = "|".join(map(str, ids))
+        if media_type == MOVIE and not series:
+            if self.include_studios and \
+                    all(n in _TMDB_COMPANY for n in self.include_studios):
+                ids = sorted({i for n in self.include_studios for i in _TMDB_COMPANY[n]})
+                params["with_companies"] = "|".join(map(str, ids))
+            # TMDB drops a film if any of its production companies is
+            # excluded, not only the first one Radarr reports: what excluding
+            # a studio means. Typed-in names have no id and aren't pushed.
+            ids = sorted({i for n in self.exclude_studios for i in _TMDB_COMPANY.get(n, [])})
+            if ids:
+                params["without_companies"] = ",".join(map(str, ids))
         return params
 
     def trakt_params(self) -> dict:
@@ -453,10 +600,13 @@ def rules_for(settings, kind: str) -> Rules:
     languages = getattr(settings, f"{kind}_languages", None) or []
     genres = (getattr(settings, "genre_filters", None) or {}).get(kind, {})
     networks = (getattr(settings, "network_filters", None) or {}).get(kind, {})
+    studios = (getattr(settings, "studio_filters", None) or {}).get(kind, {})
     return Rules(
         languages=tuple(lang.lower() for lang in languages),
         include_genres=frozenset(genres.get("include", ())),
         exclude_genres=frozenset(genres.get("exclude", ())),
         include_networks=tuple(networks.get("include", ())),
         exclude_networks=tuple(networks.get("exclude", ())),
+        include_studios=tuple(studios.get("include", ())),
+        exclude_studios=tuple(studios.get("exclude", ())),
     )

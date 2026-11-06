@@ -71,14 +71,17 @@ always wins, and clearing a field falls back to the environment value.
   selected means all languages. Titles are checked against the source *and*
   against Radarr/Sonarr's own metadata, so foreign-language titles from the
   scraped sites get caught too.
-- **Genres & networks** — for movies, TV and anime separately, mark any genres
-  to **include** (a title matching any one of them passes) or **exclude**; for
-  TV and anime, the same for networks (Netflix, HBO, Disney+ and others, or
-  type in any name). TMDB, Trakt and AniList search with these directly, so
-  asking for documentaries finds documentaries. Every title is also checked
-  against Radarr/Sonarr's genres and Sonarr's network before it's added.
-  Movies have no network in Radarr, so networks apply to series only. A title
-  whose genre or network isn't known passes.
+- **Genres, networks & studios** — for movies, TV and anime separately, mark
+  any genres to **include** (a title matching any one of them passes) or
+  **exclude**; for TV and anime, the same for networks (Netflix, HBO, Disney+
+  and others); for movies, the same for studios (A24, Pixar, Warner Bros. and
+  others). Networks and studios not in the list can be typed in. TMDB, Trakt
+  and AniList search with these directly, so asking for documentaries finds
+  documentaries. Every title is also checked against Radarr/Sonarr's genres,
+  Sonarr's network and Radarr's studio before it's added. Radarr reports one
+  studio per film (the first production company TMDB lists), so for films
+  from sites other than TMDB a co-production can be judged by its first
+  studio only. A title whose genre, network or studio isn't known passes.
 - **Limits** — max additions per run, minimum release year, the back-catalog
   toggle, and the Radarr/Sonarr request timeout.
 - **Status** — last and next run, plus the 15 most recent additions labelled
