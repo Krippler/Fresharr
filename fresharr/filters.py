@@ -21,87 +21,250 @@ from .models import MOVIE
 
 # id, label, TMDB movie genre ids, TMDB TV genre ids, Trakt slugs,
 # AniList genre names, other spellings seen in Radarr/Sonarr/Jikan.
+# Kept in alphabetical order of label, which is the order the UI shows.
+# Some, like Isekai or Mecha, are mostly reported by AniList and MyAnimeList
+# only, so they are enforced from the site's data.
 _GENRES = [
     ("action", "Action", [28], [10759], ["action"], ["Action"], ["action & adventure"]),
     ("adventure", "Adventure", [12], [10759], ["adventure"], ["Adventure"],
      ["action & adventure"]),
     ("animation", "Animation", [16], [16], ["animation"], [], []),
+    ("anime", "Anime", [], [], ["anime"], [], []),
+    ("biography", "Biography", [], [], ["biography"], [], []),
+    ("boys-love", "Boys Love", [], [], [], [], []),
     ("comedy", "Comedy", [35], [35], ["comedy"], ["Comedy"], []),
     ("crime", "Crime", [80], [80], ["crime"], [], []),
     ("documentary", "Documentary", [99], [99], ["documentary"], [], ["documentaries"]),
     ("drama", "Drama", [18], [18], ["drama"], ["Drama"], []),
+    ("ecchi", "Ecchi", [], [], [], ["Ecchi"], []),
     ("family", "Family", [10751], [10751], ["family"], [], []),
     ("fantasy", "Fantasy", [14], [10765], ["fantasy"], ["Fantasy"], ["sci-fi & fantasy"]),
+    ("food", "Food", [], [], [], [], ["gourmet", "cooking"]),
+    ("game-show", "Game Show", [], [], ["game-show"], [], []),
+    ("girls-love", "Girls Love", [], [], [], [], []),
     ("history", "History", [36], [], ["history"], [], ["historical"]),
+    ("holiday", "Holiday", [], [], ["holiday"], [], ["christmas"]),
+    ("home-and-garden", "Home & Garden", [], [], ["home-and-garden"], [], []),
     ("horror", "Horror", [27], [], ["horror"], ["Horror"], []),
+    ("isekai", "Isekai", [], [], [], [], []),
     ("kids", "Kids", [], [10762], ["children"], [], ["children", "kids"]),
+    ("mahou-shoujo", "Mahou Shoujo", [], [], [], ["Mahou Shoujo"], ["magical girl"]),
+    ("martial-arts", "Martial Arts", [], [], [], [], []),
+    ("mecha", "Mecha", [], [], [], ["Mecha"], []),
     ("music", "Music", [10402], [], ["music", "musical"], ["Music"], ["musical"]),
     ("mystery", "Mystery", [9648], [9648], ["mystery"], ["Mystery"], []),
     ("news", "News", [], [10763], ["news"], [], []),
+    ("psychological", "Psychological", [], [], [], ["Psychological"], []),
     ("reality", "Reality", [], [10764], ["reality"], [], ["reality-tv", "reality tv"]),
     ("romance", "Romance", [10749], [], ["romance"], ["Romance"], []),
+    ("school", "School", [], [], [], [], []),
     ("science-fiction", "Science Fiction", [878], [10765], ["science-fiction"],
      ["Sci-Fi"], ["sci-fi", "scifi", "sci-fi & fantasy"]),
+    ("slice-of-life", "Slice of Life", [], [], [], ["Slice of Life"], ["iyashikei"]),
     ("soap", "Soap", [], [10766], ["soap"], [], []),
     ("sport", "Sport", [], [], [], ["Sports"], ["sports"]),
+    ("superhero", "Superhero", [], [], ["superhero"], [], ["super power"]),
+    ("supernatural", "Supernatural", [], [], [], ["Supernatural"], []),
     ("talk", "Talk Show", [], [10767], ["talk-show"], [], ["talk"]),
-    ("game-show", "Game Show", [], [], ["game-show"], [], []),
     ("thriller", "Thriller", [53], [], ["thriller", "suspense"], ["Thriller"],
      ["suspense"]),
-    ("war", "War", [10752], [10768], ["war"], [], ["war & politics"]),
+    ("travel", "Travel", [], [], [], [], []),
+    ("tv-movie", "TV Movie", [10770], [], [], [], []),
+    ("war", "War", [10752], [10768], ["war"], [], ["war & politics", "military"]),
     ("western", "Western", [37], [37], ["western"], [], []),
-    # Anime-leaning genres. AniList and MyAnimeList report these; Sonarr
-    # mostly doesn't, so they are enforced from the site's data.
-    ("slice-of-life", "Slice of Life", [], [], [], ["Slice of Life"], []),
-    ("supernatural", "Supernatural", [], [], [], ["Supernatural"], []),
-    ("psychological", "Psychological", [], [], [], ["Psychological"], []),
-    ("mecha", "Mecha", [], [], [], ["Mecha"], []),
-    ("ecchi", "Ecchi", [], [], [], ["Ecchi"], []),
 ]
 
-# id, label, TMDB network id, other spellings seen in Sonarr/Trakt.
+# ISO 639-1 code, label, other names Radarr/Sonarr give the language.
+# Alphabetical by label.
+_LANGUAGES = [
+    ("ar", "Arabic", []),
+    ("bn", "Bengali", []),
+    ("bg", "Bulgarian", []),
+    ("ca", "Catalan", []),
+    ("zh", "Chinese", ["mandarin", "cantonese"]),
+    ("hr", "Croatian", []),
+    ("cs", "Czech", []),
+    ("da", "Danish", []),
+    ("nl", "Dutch", ["flemish"]),
+    ("en", "English", []),
+    ("et", "Estonian", []),
+    ("tl", "Filipino", ["tagalog"]),
+    ("fi", "Finnish", []),
+    ("fr", "French", []),
+    ("de", "German", []),
+    ("el", "Greek", []),
+    ("he", "Hebrew", []),
+    ("hi", "Hindi", []),
+    ("hu", "Hungarian", []),
+    ("is", "Icelandic", []),
+    ("id", "Indonesian", []),
+    ("it", "Italian", []),
+    ("ja", "Japanese", []),
+    ("kn", "Kannada", []),
+    ("ko", "Korean", []),
+    ("lv", "Latvian", []),
+    ("lt", "Lithuanian", []),
+    ("ms", "Malay", []),
+    ("ml", "Malayalam", []),
+    ("mr", "Marathi", []),
+    ("no", "Norwegian", ["norwegian bokmal", "norwegian bokmål"]),
+    ("fa", "Persian", ["farsi"]),
+    ("pl", "Polish", []),
+    ("pt", "Portuguese", ["portuguese (brazil)", "brazilian portuguese"]),
+    ("ro", "Romanian", []),
+    ("ru", "Russian", []),
+    ("sr", "Serbian", []),
+    ("sk", "Slovak", []),
+    ("es", "Spanish", ["spanish (latino)", "latin american spanish"]),
+    ("sv", "Swedish", []),
+    ("ta", "Tamil", []),
+    ("te", "Telugu", []),
+    ("th", "Thai", []),
+    ("tr", "Turkish", []),
+    ("uk", "Ukrainian", []),
+    ("ur", "Urdu", []),
+    ("vi", "Vietnamese", []),
+]
+
+LANGUAGE_OPTIONS = [{"code": code, "label": label}
+                    for code, label, _ in sorted(_LANGUAGES, key=lambda r: r[1])]
+# Radarr/Sonarr report a title's original language by English name.
+LANGUAGE_NAME_TO_CODE = {name: code for code, label, others in _LANGUAGES
+                         for name in (label.lower(), *others)}
+# Codes some sites use in place of the ISO 639-1 one: TMDB gives Cantonese
+# as "cn" and some Norwegian as "nb"; older data has "iw" and "in".
+_LANGUAGE_CODE_ALIASES = {"cn": "zh", "nb": "no", "nn": "no", "fil": "tl",
+                          "iw": "he", "in": "id"}
+
+
+def normalize_language(code: str | None) -> str | None:
+    """A site's language code in the form the filter settings use."""
+    if not code:
+        return None
+    code = code.strip().lower()
+    return _LANGUAGE_CODE_ALIASES.get(code, code)
+
+
+# id, label, TMDB network ids, other spellings seen in Sonarr/Trakt.
+# Alphabetical by label. TMDB ids were checked against each network's TMDB
+# page (name and homepage); a network TMDB splits in two (MGM+ and its old
+# name Epix, or TBS in the US and Japan) lists both.
 _NETWORKS = [
-    ("netflix", "Netflix", 213, []),
-    ("hbo", "HBO", 49, []),
-    ("max", "HBO Max / Max", 3186, ["hbo max", "max"]),
-    ("hulu", "Hulu", 453, []),
-    ("disney-plus", "Disney+", 2739, ["disney+", "disney plus"]),
-    ("apple-tv", "Apple TV+", 2552, ["apple tv+", "apple tv", "apple tv plus"]),
-    ("prime-video", "Prime Video", 1024,
-     ["prime video", "amazon", "amazon prime video", "amazon studios"]),
-    ("paramount-plus", "Paramount+", 4330,
-     ["paramount+", "paramount plus", "cbs all access"]),
-    ("peacock", "Peacock", 3353, []),
-    ("showtime", "Showtime", 67, []),
-    ("starz", "Starz", 318, []),
-    ("cinemax", "Cinemax", 359, []),
-    ("nbc", "NBC", 6, []),
-    ("abc", "ABC", 2, []),
-    ("cbs", "CBS", 16, []),
-    ("fox", "FOX", 19, []),
-    ("the-cw", "The CW", 71, ["the cw", "cw"]),
-    ("fx", "FX", 88, []),
-    ("amc", "AMC", 174, []),
-    ("tnt", "TNT", 41, []),
-    ("tbs", "TBS", 68, []),
-    ("usa-network", "USA Network", 30, ["usa network", "usa"]),
-    ("syfy", "Syfy", 77, []),
-    ("bravo", "Bravo", 74, []),
-    ("mtv", "MTV", 33, []),
-    ("comedy-central", "Comedy Central", 47, []),
-    ("adult-swim", "Adult Swim", 80, ["adult swim", "[adult swim]"]),
-    ("cartoon-network", "Cartoon Network", 56, []),
-    ("pbs", "PBS", 14, []),
-    ("discovery", "Discovery", 64, ["discovery", "discovery channel"]),
-    ("national-geographic", "National Geographic", 43,
+    ("a-and-e", "A&E", [129], []),
+    ("abc", "ABC", [2], []),
+    ("acorn-tv", "Acorn TV", [2697], []),
+    ("adult-swim", "Adult Swim", [80], ["adult swim", "[adult swim]"]),
+    ("amc", "AMC", [174], []),
+    ("amc-plus", "AMC+", [4661], []),
+    ("animal-planet", "Animal Planet", [91], []),
+    ("apple-tv", "Apple TV+", [2552], ["apple tv+", "apple tv", "apple tv plus"]),
+    ("arte", "ARTE", [662], []),
+    ("at-x", "AT-X", [173], []),
+    ("bbc-america", "BBC America", [493], []),
+    ("bbc-four", "BBC Four", [100], []),
+    ("bbc-iplayer", "BBC iPlayer", [1155], []),
+    ("bbc-one", "BBC One", [4], []),
+    ("bbc-three", "BBC Three", [3], []),
+    ("bbc-two", "BBC Two", [332], []),
+    ("bet", "BET", [24], []),
+    ("bravo", "Bravo", [74], []),
+    ("britbox", "BritBox", [4025], []),
+    ("canal-plus", "Canal+", [285], []),
+    ("cartoon-network", "Cartoon Network", [56], []),
+    ("cbc", "CBC", [23], ["cbc television"]),
+    ("cbs", "CBS", [16], []),
+    ("channel-4", "Channel 4", [26], []),
+    ("channel-5", "Channel 5", [99], ["5"]),
+    ("cinemax", "Cinemax", [359], []),
+    ("comedy-central", "Comedy Central", [47], []),
+    ("crave", "Crave", [1344], []),
+    ("crunchyroll", "Crunchyroll", [1112], []),
+    ("ctv", "CTV", [110], []),
+    ("cw-seed", "CW Seed", [1049], []),
+    ("das-erste", "Das Erste (ARD)", [308], ["das erste", "ard"]),
+    ("discovery", "Discovery", [64], ["discovery", "discovery channel"]),
+    ("discovery-plus", "Discovery+", [4353], []),
+    ("disney-channel", "Disney Channel", [54], []),
+    ("disney-xd", "Disney XD", [44], []),
+    ("disney-plus", "Disney+", [2739], ["disney+", "disney plus"]),
+    ("e", "E!", [76], ["e! entertainment"]),
+    ("food-network", "Food Network", [143], []),
+    ("fox", "FOX", [19], []),
+    ("freeform", "Freeform", [1267], ["abc family"]),
+    ("freevee", "Freevee", [5865], ["amazon freevee", "imdb tv"]),
+    ("fuji-tv", "Fuji TV", [1], []),
+    ("fx", "FX", [88], []),
+    ("fxx", "FXX", [1035], []),
+    ("hallmark", "Hallmark Channel", [384], []),
+    ("hbo", "HBO", [49], []),
+    ("max", "HBO Max / Max", [3186], ["hbo max", "max"]),
+    ("hgtv", "HGTV", [210], []),
+    ("hidive", "HIDIVE", [7645], []),
+    ("history-channel", "History", [65], ["history", "history channel"]),
+    ("hulu", "Hulu", [453], []),
+    ("ifc", "IFC", [124], []),
+    ("investigation-discovery", "Investigation Discovery", [244], ["id"]),
+    ("itv", "ITV1", [9], ["itv"]),
+    ("itvx", "ITVX", [5871], []),
+    ("jtbc", "JTBC", [885], []),
+    ("kbs2", "KBS2", [342], []),
+    ("lifetime", "Lifetime", [34], []),
+    ("mbc", "MBC", [97], []),
+    ("mbs", "MBS", [94], []),
+    ("mgm-plus", "MGM+", [6219, 922], ["epix"]),
+    ("mtv", "MTV", [33], []),
+    ("nat-geo-wild", "Nat Geo Wild", [1043], []),
+    ("national-geographic", "National Geographic", [43],
      ["national geographic", "national geographic channel", "nat geo"]),
-    ("history-channel", "History", 65, ["history", "history channel"]),
-    ("bbc-one", "BBC One", 4, []),
-    ("crunchyroll", "Crunchyroll", 1112, []),
+    ("nbc", "NBC", [6], []),
+    ("netflix", "Netflix", [213], []),
+    ("nickelodeon", "Nickelodeon", [13], ["nick"]),
+    ("nippon-tv", "Nippon TV", [57], ["ntv"]),
+    ("oxygen", "Oxygen", [132], []),
+    ("paramount-network", "Paramount Network", [2076], ["spike"]),
+    ("paramount-plus", "Paramount+", [4330],
+     ["paramount+", "paramount plus", "cbs all access"]),
+    ("pbs", "PBS", [14], []),
+    ("peacock", "Peacock", [3353], []),
+    ("prime-video", "Prime Video", [1024],
+     ["prime video", "amazon", "amazon prime video", "amazon studios"]),
+    ("rai-1", "Rai 1", [533], []),
+    ("roku-channel", "Roku Channel", [4692], ["the roku channel"]),
+    ("science-channel", "Science Channel", [226], ["science"]),
+    ("showtime", "Showtime", [67], []),
+    ("shudder", "Shudder", [2949], []),
+    ("sky-atlantic", "Sky Atlantic", [1063], []),
+    ("sky-one", "Sky One / Sky Max", [214], ["sky one", "sky max"]),
+    ("stan", "Stan", [1255], []),
+    ("starz", "Starz", [318], []),
+    ("sundance-tv", "SundanceTV", [270], ["sundance tv"]),
+    ("syfy", "Syfy", [77], []),
+    ("tbs", "TBS", [68, 160], []),
+    ("telemundo", "Telemundo", [193], []),
+    ("tf1", "TF1", [290], []),
+    ("the-cw", "The CW", [71], ["the cw", "cw"]),
+    ("tlc", "TLC", [84], []),
+    ("tnt", "TNT", [41], []),
+    ("tokyo-mx", "Tokyo MX", [614], []),
+    ("travel-channel", "Travel Channel", [209], []),
+    ("trutv", "truTV", [364], []),
+    ("tubi", "Tubi", [5187], []),
+    ("tv-tokyo", "TV Tokyo", [98], []),
+    ("tvn", "tvN", [866], []),
+    ("univision", "Univision", [28], []),
+    ("usa-network", "USA Network", [30], ["usa network", "usa"]),
+    ("youtube", "YouTube", [247], []),
+    ("youtube-premium", "YouTube Premium", [1436], ["youtube red"]),
+    ("zdf", "ZDF", [31], []),
 ]
 
-GENRE_OPTIONS = [{"id": g[0], "label": g[1]} for g in _GENRES]
-NETWORK_OPTIONS = [{"id": n[0], "label": n[1]} for n in _NETWORKS]
+def _alphabetical(rows) -> list[dict]:
+    return [{"id": r[0], "label": r[1]}
+            for r in sorted(rows, key=lambda r: r[1].casefold())]
+
+
+GENRE_OPTIONS = _alphabetical(_GENRES)
+NETWORK_OPTIONS = _alphabetical(_NETWORKS)
 GENRE_IDS = frozenset(g[0] for g in _GENRES)
 NETWORK_IDS = frozenset(n[0] for n in _NETWORKS)
 
@@ -252,8 +415,8 @@ class Rules:
                 params["without_genres"] = ",".join(map(str, without))
         if series and self.include_networks and \
                 all(n in _TMDB_NETWORK for n in self.include_networks):
-            params["with_networks"] = "|".join(
-                str(_TMDB_NETWORK[n]) for n in sorted(self.include_networks))
+            ids = sorted({i for n in self.include_networks for i in _TMDB_NETWORK[n]})
+            params["with_networks"] = "|".join(map(str, ids))
         return params
 
     def trakt_params(self) -> dict:

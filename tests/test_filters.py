@@ -28,7 +28,7 @@ def test_genre_spellings_from_every_site_match_one_id():
     assert canonical_genres(["Children"]) == {"kids"}                     # Sonarr
     assert canonical_genres(["talk-show"]) == {"talk"}
     assert canonical_genres(["Slice of Life"]) == {"slice-of-life"}
-    assert canonical_genres(["TV Movie", None, 7]) == set()               # unknown
+    assert canonical_genres(["Mini-Series", None, 7]) == set()            # unknown
 
 
 def test_tmdb_genre_ids_are_named():
@@ -290,3 +290,51 @@ def test_myanimelist_genres_include_themes_and_explicit_genres():
         "themes": [{"mal_id": 18, "type": "anime", "name": "Mecha"}]})
     assert item.genres == ("Action", "Ecchi", "Mecha")
     assert "excluded" in Rules(exclude_genres=frozenset({"ecchi"})).genre_reason(item.genres)
+
+
+# ── Option lists ─────────────────────────────────────────────────────────────
+
+def test_option_lists_are_alphabetical():
+    from fresharr.filters import GENRE_OPTIONS, LANGUAGE_OPTIONS, NETWORK_OPTIONS
+    for options in (GENRE_OPTIONS, NETWORK_OPTIONS, LANGUAGE_OPTIONS):
+        labels = [o["label"] for o in options]
+        assert labels == sorted(labels, key=str.casefold)
+        assert len(set(labels)) == len(labels)
+
+
+def test_networks_split_on_tmdb_cover_both_ids():
+    assert Rules(include_networks=("mgm-plus",)).tmdb_params(TV, True) \
+        == {"with_networks": "922|6219"}                      # MGM+ and Epix
+    assert Rules(include_networks=("mgm-plus",)).network_reason("Epix") is None
+    assert Rules(include_networks=("a-and-e",)).network_reason("A&E") is None
+    assert Rules(include_networks=("e",)).network_reason("E!") is None
+    assert "not in the selected" in Rules(include_networks=("e",)).network_reason("ESPN")
+
+
+def test_every_language_option_can_be_enforced_at_the_arr():
+    # A menu option without a Radarr/Sonarr name would never be checked there.
+    from fresharr.filters import LANGUAGE_NAME_TO_CODE, LANGUAGE_OPTIONS
+    assert {o["code"] for o in LANGUAGE_OPTIONS} <= set(LANGUAGE_NAME_TO_CODE.values())
+
+
+def test_language_name_variants_at_the_arr():
+    from fresharr.arr.base import excluded_language
+    brazil = {"originalLanguage": {"name": "Portuguese (Brazil)"}}
+    assert excluded_language(brazil, ["pt"]) is None
+    assert excluded_language(brazil, ["en"]) == "Portuguese (Brazil)"
+    assert excluded_language({"originalLanguage": {"name": "Tamil"}}, ["en"]) == "Tamil"
+
+
+def test_site_language_codes_are_normalised(monkeypatch, settings):
+    # TMDB tags Cantonese films "cn"; a Chinese filter must keep them.
+    class Src:
+        def fetch(self):
+            return [MediaItem(title="HK Film", media_type=MOVIE, source="tmdb",
+                              year=2026, language="cn"),
+                    MediaItem(title="Other", media_type=MOVIE, source="tmdb",
+                              year=2026, language="fr")]
+
+    monkeypatch.setattr("fresharr.runner.build_sources", lambda cfg, s: [Src()])
+    settings.update({"movie_languages": ["zh"]})
+    config = Config(radarr_url="http://r", radarr_api_key="k")
+    assert [i.title for i in collect_items(config, settings)] == ["HK Film"]

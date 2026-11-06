@@ -4,6 +4,29 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
+## [Unreleased]
+
+### Added
+
+- **Many more networks:** 103, up from 34, including A&E, AMC+, BBC Two/Three/
+  Four, BritBox, Channel 4, Discovery+, Disney Channel, Freeform, HGTV,
+  ITVX, MGM+ (and Epix), Nickelodeon, Shudder, Sky Atlantic, TLC, Tubi,
+  YouTube, and anime and Korean broadcasters such as Tokyo MX, TV Tokyo,
+  Fuji TV, AT-X, HIDIVE, tvN, JTBC, KBS2 and MBC.
+- **More genres:** 44, up from 30, adding Anime, Biography, Boys Love, Food,
+  Girls Love, Holiday, Home & Garden, Isekai, Mahou Shoujo, Martial Arts,
+  School, Superhero, Travel and TV Movie.
+- **More original languages:** 47, up from 14, including Arabic, Dutch,
+  Polish, Thai, Turkish, Vietnamese and the major Indian languages.
+
+### Changed
+
+- Languages, genres and networks are listed alphabetically.
+
+### Fixed
+
+- Films TMDB tags as Cantonese ("cn") are kept by a Chinese language filter.
+
 ## [0.2.1] — 2026-11-05
 
 ### Fixed

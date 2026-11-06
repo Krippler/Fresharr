@@ -8,7 +8,7 @@ from .arr.base import ArrError
 from .arr.radarr import Radarr
 from .arr.sonarr import Sonarr
 from .config import Config
-from .filters import Rules, rules_for
+from .filters import Rules, normalize_language, rules_for
 from .models import MOVIE, TV, MediaItem
 from .settings import SettingsStore
 from .sources import build_sources
@@ -27,8 +27,8 @@ def _source_reason(item: MediaItem, rules: Rules) -> str | None:
     """Why the discovery site's own data already rules a title out. Unknown
     language, genres or network always pass; Radarr/Sonarr's metadata is
     checked again at add time."""
-    if rules.languages and item.language \
-            and item.language.lower() not in rules.languages:
+    language = normalize_language(item.language)
+    if rules.languages and language and language not in rules.languages:
         return f"language {item.language}"
     return rules.genre_reason(item.genres) or rules.network_reason(item.network)
 

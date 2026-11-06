@@ -17,33 +17,13 @@ from .arr.sonarr import Sonarr
 from .config import Config
 from .options import GENERAL, OPTION_DEFS, RADARR, SONARR
 from .scheduler import Scheduler
-from .filters import GENRE_OPTIONS, NETWORK_OPTIONS
+from .filters import GENRE_OPTIONS, LANGUAGE_OPTIONS, NETWORK_OPTIONS
 from .settings import SettingsError, SettingsStore
 from .sources import describe_sources
 from .state import State
 from .status import load_status
 
 log = logging.getLogger(__name__)
-
-# Choices offered by the original-language menu. Sources that don't report
-# a language (the scraped review sites) are unaffected by this filter.
-LANGUAGE_OPTIONS = [
-    {"code": "en", "label": "English"},
-    {"code": "ja", "label": "Japanese"},
-    {"code": "ko", "label": "Korean"},
-    {"code": "zh", "label": "Chinese"},
-    {"code": "es", "label": "Spanish"},
-    {"code": "fr", "label": "French"},
-    {"code": "de", "label": "German"},
-    {"code": "it", "label": "Italian"},
-    {"code": "pt", "label": "Portuguese"},
-    {"code": "hi", "label": "Hindi"},
-    {"code": "ru", "label": "Russian"},
-    {"code": "sv", "label": "Swedish"},
-    {"code": "da", "label": "Danish"},
-    {"code": "no", "label": "Norwegian"},
-]
-
 
 def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) -> Flask:
     app = Flask(__name__)
