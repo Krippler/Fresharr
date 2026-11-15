@@ -1,6 +1,6 @@
 import os
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # What this build reports itself as. Release images are stamped with their
 # version; anything else with the commit it was built from (git describe,
