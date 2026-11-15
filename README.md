@@ -47,7 +47,10 @@ environment variables — see
 3. Leave **Dry Run** on for the first run, check the log, then turn it off.
 
 The container runs as `nobody:users` (99:100), matching Unraid appdata
-conventions.
+conventions; set `PUID`/`PGID` to change that. At startup it makes sure the
+appdata folder belongs to that user, so saving works even if Docker created
+the folder as root. If settings still can't be saved, a red banner at the top
+of the web interface says why.
 
 ## The web interface
 

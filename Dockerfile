@@ -7,7 +7,9 @@ LABEL org.opencontainers.image.title="Fresharr" \
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    CONFIG_DIR=/config
+    CONFIG_DIR=/config \
+    PUID=99 \
+    PGID=100
 
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
@@ -19,11 +21,11 @@ RUN pip install --no-cache-dir .
 ARG FRESHARR_BUILD=
 ENV FRESHARR_BUILD=${FRESHARR_BUILD}
 
-# Unraid convention: run as nobody:users (99:100) so files in /config
-# stay manageable from the array.
+# Starts as root only to give /config to PUID:PGID (Unraid's nobody:users by
+# default; Docker creates a missing appdata folder owned by root), then drops
+# to that user before doing anything else. See fresharr/privileges.py.
 RUN mkdir -p /config && chown 99:100 /config
 VOLUME /config
 EXPOSE 8383
-USER 99:100
 
 ENTRYPOINT ["fresharr"]

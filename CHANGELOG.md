@@ -4,6 +4,27 @@ All notable changes are here. The format follows Keep a Changelog, and the
 top section's heading is what the release workflow reads: `## [X.Y.Z] — DATE`
 on `main` publishes that version, `## [Unreleased]` publishes only `edge`.
 
+## [Unreleased]
+
+### Fixed
+
+- **Settings lost on restart.** If the appdata folder wasn't writable — Docker
+  creates a missing one owned by root, and the container ran as nobody — every
+  save failed, but the change still showed in the web interface until the next
+  restart. The container now starts as root just long enough to give the
+  appdata folder to `PUID:PGID` (99:100 by default), then runs as that user.
+- **A failed save no longer looks like it worked.** The change isn't applied,
+  the error is shown, and a banner stays at the top of the page until saving
+  works again.
+- **Settings, history and status survive a hard reboot.** Files are flushed to
+  disk before replacing the old ones, and the previous version is kept as a
+  `.bak` that's used if the main file is missing or unreadable. An unreadable
+  file is kept as `.corrupt` instead of being overwritten with defaults.
+
+### Added
+
+- `PUID` and `PGID` settings (advanced, in the Unraid template).
+
 ## [0.3.0] — 2026-11-06
 
 ### Added

@@ -8,13 +8,13 @@ hard minimum of 18 hours between runs) so Fresharr never hits the
 discovery sites at one predictable time of day.
 """
 
+import copy
 import dataclasses
-import json
 import logging
-import os
 import re
-import tempfile
 import threading
+
+from .storage import load_json, save_json
 
 log = logging.getLogger(__name__)
 
@@ -125,15 +125,9 @@ class SettingsStore:
         self._load()
 
     def _load(self) -> None:
-        try:
-            with open(self.path, encoding="utf-8") as fh:
-                self._data = json.load(fh)
-        except FileNotFoundError:
-            self._data = {}
-        except (json.JSONDecodeError, OSError) as exc:
-            log.warning("Could not read settings file %s (%s); using defaults",
-                        self.path, exc)
-            self._data = {}
+        data = load_json(self.path, "settings")
+        self._data = data if isinstance(data, dict) else {}
+        self._data.pop("version", None)
         self._migrate_split_options()
 
     def _migrate_split_options(self) -> None:
@@ -147,18 +141,8 @@ class SettingsStore:
             options.setdefault(movies_key, value)
             options.setdefault(tv_key, value)
 
-    def _save(self) -> None:
-        directory = os.path.dirname(self.path) or "."
-        os.makedirs(directory, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".settings-", suffix=".json")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump({"version": 1, **self._data}, fh, indent=2, sort_keys=True)
-            os.replace(tmp_path, self.path)
-        except OSError:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
+    def _save(self, data: dict) -> None:
+        save_json(self.path, {"version": 1, **data}, indent=2, sort_keys=True)
 
     @property
     def run_interval_days(self) -> float:
@@ -396,19 +380,23 @@ class SettingsStore:
             changes["card_layout"] = normalized_layout
 
         with self._lock:
+            # Changes go onto a copy that replaces the live settings only once
+            # it's safely on disk. Applying them first let a failed save look
+            # like it had worked, until a restart quietly undid it.
+            data = copy.deepcopy(self._data)
             if "run_interval_days" in changes:
-                self._data["run_interval_days"] = changes["run_interval_days"]
+                data["run_interval_days"] = changes["run_interval_days"]
             for name, entry in changes.get("sources", {}).items():
-                self._data.setdefault("sources", {}).setdefault(name, {})["enabled"] = \
+                data.setdefault("sources", {}).setdefault(name, {})["enabled"] = \
                     entry["enabled"]
             for key in ("movie_languages", "tv_languages", "anime_languages"):
                 if key in changes:
-                    self._data[key] = changes[key]
+                    data[key] = changes[key]
             for key in ("genre_filters", "network_filters", "studio_filters"):
                 for kind, entry in changes.get(key, {}).items():
-                    store = self._data.get(key)
+                    store = data.get(key)
                     if not isinstance(store, dict):
-                        store = self._data[key] = {}
+                        store = data[key] = {}
                     current = store.get(kind) if isinstance(store.get(kind), dict) else {}
                     # Moving a value to one side takes it off the other.
                     for side, values in entry.items():
@@ -420,11 +408,11 @@ class SettingsStore:
                     store[kind] = current
             for key, value in changes.get("options", {}).items():
                 if value is None:  # cleared in the UI: fall back to env/default
-                    self._data.get("options", {}).pop(key, None)
+                    data.get("options", {}).pop(key, None)
                 else:
-                    self._data.setdefault("options", {})[key] = value
+                    data.setdefault("options", {})[key] = value
             if "card_layout" in changes:
-                store = self._data.get("card_layout")
+                store = data.get("card_layout")
                 if not isinstance(store, dict):
                     store = {}
                 for key, value in changes["card_layout"].items():
@@ -433,8 +421,9 @@ class SettingsStore:
                     else:
                         store[key] = value
                 if store:
-                    self._data["card_layout"] = store
+                    data["card_layout"] = store
                 else:
-                    self._data.pop("card_layout", None)
-            self._save()
+                    data.pop("card_layout", None)
+            self._save(data)
+            self._data = data
         return self.snapshot()

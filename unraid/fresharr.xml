@@ -31,4 +31,6 @@
   <Config Name="Appdata" Target="/config" Default="/mnt/user/appdata/fresharr" Mode="rw" Description="Stores Fresharr's settings (connections, thresholds, schedule, enabled sites) and its state file (which titles were already added)." Type="Path" Display="always" Required="true" Mask="false"/>
   <Config Name="Dry Run" Target="DRY_RUN" Default="true" Mode="" Description="true = only log what would be added, don't touch Radarr/Sonarr. Set to false once you're happy with the results." Type="Variable" Display="always" Required="true" Mask="false"/>
   <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="DEBUG, INFO, WARNING or ERROR." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User Fresharr runs as, and owner of its appdata files. 99 is nobody." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group Fresharr runs as. 100 is users." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
 </Container>

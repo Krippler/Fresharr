@@ -23,6 +23,7 @@ from .settings import SettingsError, SettingsStore
 from .sources import describe_sources
 from .state import State
 from .status import load_status
+from .storage import storage_error
 
 log = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             "last_run": status or None,
             "next_run_at": int(scheduler.next_run_at()),
             "running": scheduler.running,
+            "storage_error": storage_error(),
             "dry_run": config.dry_run,
             "arr": {
                 "radarr": effective.radarr_enabled,
@@ -89,6 +91,10 @@ def create_app(config: Config, settings: SettingsStore, scheduler: Scheduler) ->
             snapshot = settings.update(payload)
         except SettingsError as exc:
             return jsonify({"error": str(exc)}), 400
+        except OSError:
+            # Not applied: the settings stay as they were on disk.
+            return jsonify({"error": storage_error()
+                            or "Settings could not be saved"}), 500
         # A changed cadence should move the next run immediately, not only
         # after the following run completes.
         if snapshot["run_interval_days"] != previous_interval:
@@ -392,6 +398,7 @@ INDEX_HTML = """<!doctype html>
                 padding: .55rem .9rem; border-radius: 8px; font-size: .85rem;
                 background: #33320f; color: #e8dc8a; border: 1px solid #5a561a; }
   .lockbanner[hidden] { display: none; }   /* display:flex would defeat [hidden] */
+  .lockbanner.bad { background: #3a1d20; color: #f0b8bc; border-color: #6e2a30; }
   .lockbanner .spin { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
                       border: 2px solid #756f2a; border-top-color: #e8dc8a;
                       animation: spin 0.8s linear infinite; }
@@ -430,6 +437,7 @@ INDEX_HTML = """<!doctype html>
     <button class="ghostbtn" id="resetlayout" hidden>Reset layout</button>
   </header>
 
+  <div class="lockbanner bad" id="storagebanner" hidden></div>
   <div class="lockbanner" id="lockbanner" hidden>
     <span class="spin"></span>A run is in progress &mdash; settings are locked
     until it finishes.
@@ -707,6 +715,8 @@ function render(o) {
     : '<li class="muted">Nothing yet.</li>';
 
   $("lockbanner").hidden = !o.running;
+  $("storagebanner").hidden = !o.storage_error;
+  $("storagebanner").textContent = o.storage_error || "";
   setControlsLocked(o.running);
 }
 

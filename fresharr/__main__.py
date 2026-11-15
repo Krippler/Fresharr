@@ -4,10 +4,12 @@ import sys
 
 from . import BUILD
 from .config import Config
+from .privileges import drop_privileges
 from .runner import run_once
 from .scheduler import Scheduler
 from .settings import SettingsStore
 from .sources import SOURCE_DEFAULTS
+from .storage import check_writable
 from .web import create_app
 
 log = logging.getLogger("fresharr")
@@ -22,6 +24,13 @@ def main() -> int:
     )
     config = Config.from_env()
     logging.getLogger().setLevel(config.log_level)
+    config_dirs = [os.path.dirname(path) or "." for path in
+                   (config.settings_file, config.state_file, config.status_file)]
+    drop_privileges(config_dirs)
+    for directory in dict.fromkeys(config_dirs):
+        problem = check_writable(directory)
+        if problem:
+            log.error("%s", problem)
     settings = SettingsStore(config.settings_file, SOURCE_DEFAULTS)
     log.info("Fresharr %s starting (Radarr: %s, Sonarr: %s)",
              BUILD,

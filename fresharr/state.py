@@ -1,8 +1,7 @@
-import json
 import logging
-import os
-import tempfile
 import time
+
+from .storage import load_json, save_json
 
 log = logging.getLogger(__name__)
 
@@ -31,15 +30,9 @@ class State:
         self._load()
 
     def _load(self) -> None:
-        try:
-            with open(self.path, encoding="utf-8") as fh:
-                data = json.load(fh)
-            self._items = data.get("items", {})
-        except FileNotFoundError:
-            self._items = {}
-        except (json.JSONDecodeError, OSError) as exc:
-            log.warning("Could not read state file %s (%s); starting fresh", self.path, exc)
-            self._items = {}
+        data = load_json(self.path, "state")
+        items = data.get("items") if isinstance(data, dict) else None
+        self._items = items if isinstance(items, dict) else {}
 
     def _prune(self) -> None:
         """Keep the most-recently-touched entries, drop the oldest."""
@@ -54,17 +47,8 @@ class State:
 
     def save(self) -> None:
         self._prune()
-        directory = os.path.dirname(self.path) or "."
-        os.makedirs(directory, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".state-", suffix=".json")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump({"version": 1, "items": self._items}, fh, indent=2, sort_keys=True)
-            os.replace(tmp_path, self.path)
-        except OSError:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
+        save_json(self.path, {"version": 1, "items": self._items},
+                  indent=2, sort_keys=True)
 
     def record(self, key: str, status: str, title: str, kind: str | None = None,
                filters: str | None = None) -> None:
